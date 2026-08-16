@@ -1,0 +1,18 @@
+# Credenciales y llaves — nunca deben subirse a ningún repositorio
+.env
+pri_key.pem
+certificate.pem
+
+# Personas reales a consultar en prod — no deben versionarse
+input/*.json
+
+# Salidas generadas por el script (contienen datos personales de crédito)
+output/
+
+# Entorno virtual de Python
+venv/
+
+# Artefactos de la compilación a .exe (se regeneran con build_exe.bat)
+build/
+dist/
+*.spec
