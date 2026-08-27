@@ -12,6 +12,10 @@ output/
 # Entorno virtual de Python
 venv/
 
+# Cache de Python
+__pycache__/
+*.pyc
+
 # Artefactos de la compilación a .exe (se regeneran con build_exe.bat)
 build/
 dist/

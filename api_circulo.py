@@ -49,10 +49,18 @@ DEFAULTS_FLAGS más abajo):
                                   no gastar una consulta real sin querer).
 
   Salida:
-    /OUTPUT_WS="output"          Carpeta donde se guardan JSON/XML/evidencias.
-    /ArchivoSalida_WS="JSON_Y_XML"   JSON | XML | JSON_Y_XML (default).
-                                  (Este cliente no genera PDF.)
+    /OUTPUT_WS="output"          Carpeta donde se guardan JSON/XML/PDF/evidencias.
+    /ArchivoSalida_WS="ALL"      Qué generar: JSON | XML | PDF | ALL (default).
+                                  ALL genera los tres. El PDF siempre se arma
+                                  a partir del XML (si no pides XML como
+                                  salida, se usa uno temporal que se borra
+                                  al terminar).
     /XML_COMPACTO_WS="NO"        SI genera además el XML en una sola línea.
+    /PDF_MASCARA_WS="NO"         SI genera el PDF con identidad ficticia
+                                  legible (para demos), en vez de los datos
+                                  reales de la persona. Los datos financieros
+                                  (cuentas, montos, otorgantes) nunca se
+                                  enmascaran.
 
   Otros:
     /ENDPOINT_WS="reporte"       reporte (default) | securitytest.
@@ -78,12 +86,15 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 from datetime import datetime
 from xml.sax.saxutils import escape as _escape_xml
 
 import requests
 from ecdsa import SigningKey, VerifyingKey, NIST384p, BadSignatureError
 from ecdsa.util import sigencode_der, sigdecode_der
+
+import xml_a_pdf
 
 # Carpeta donde vive el .exe cuando está compilado con PyInstaller
 # (sys.frozen), o la del propio script cuando corres "python api_circulo.py".
@@ -156,8 +167,9 @@ DEFAULTS_FLAGS = {
     "DOMICILIO_CP_WS": "",
     "INPUT_WS": "",
     "OUTPUT_WS": "output",
-    "ARCHIVOSALIDA_WS": "JSON_Y_XML",
+    "ARCHIVOSALIDA_WS": "ALL",
     "XML_COMPACTO_WS": "NO",
+    "PDF_MASCARA_WS": "NO",
     "ENDPOINT_WS": "reporte",
     "PAUSAR_WS": "",
 }
@@ -646,6 +658,46 @@ def guardar_json(data: dict, ruta_salida: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# XML -> PDF (integra xml_a_pdf.py / parser_xml.py / reporte_estructura.py,
+# adaptados de Xml2Pdf-Circulo)
+# ---------------------------------------------------------------------------
+
+def generar_pdf(data: dict, ruta_pdf: str, mascara: bool = False,
+                 ruta_xml_existente: str = None) -> str:
+    """
+    Genera el PDF del reporte a partir de la respuesta JSON del API.
+
+    Si ya escribiste el XML a disco (porque también pediste XML como
+    salida), pásalo en `ruta_xml_existente` para no rehacer trabajo. Si no,
+    se arma un XML temporal solo para alimentar al generador de PDF, y se
+    borra al terminar.
+    """
+    ruta_pdf = ruta_libre(ruta_pdf)
+
+    if ruta_xml_existente:
+        xml_a_pdf.construir(ruta_xml_existente, ruta_pdf, mascara=mascara)
+        ruta = os.path.abspath(ruta_pdf)
+        print(f"PDF generado: {ruta}")
+        return ruta
+
+    xml_texto = construir_xml(data, indentado=True)
+    fd, ruta_tmp = tempfile.mkstemp(suffix=".xml", prefix="cdc_tmp_")
+    os.close(fd)
+    try:
+        with open(ruta_tmp, "w", encoding="ISO-8859-1", errors="xmlcharrefreplace") as f:
+            f.write(xml_texto)
+        xml_a_pdf.construir(ruta_tmp, ruta_pdf, mascara=mascara)
+    finally:
+        try:
+            os.remove(ruta_tmp)
+        except OSError:
+            pass
+    ruta = os.path.abspath(ruta_pdf)
+    print(f"PDF generado: {ruta}")
+    return ruta
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -709,12 +761,14 @@ def main(flags: dict) -> None:
     print(f">> Usando ambiente: {ambiente.upper()} ({URLS[ambiente]})\n")
 
     formato_salida = _obtener(flags, "ARCHIVOSALIDA_WS").strip().upper()
-    if formato_salida not in ("XML", "JSON", "JSON_Y_XML"):
-        print(f"Error: ArchivoSalida_WS debe ser XML, JSON o JSON_Y_XML (llegó {formato_salida!r}).")
+    if formato_salida not in ("XML", "JSON", "PDF", "ALL"):
+        print(f"Error: ArchivoSalida_WS debe ser JSON, XML, PDF o ALL (llegó {formato_salida!r}).")
         sys.exit(1)
-    generar_json = formato_salida in ("JSON", "JSON_Y_XML")
-    generar_xml = formato_salida in ("XML", "JSON_Y_XML")
+    generar_json = formato_salida in ("JSON", "ALL")
+    generar_xml = formato_salida in ("XML", "ALL")
+    generar_pdf_flag = formato_salida in ("PDF", "ALL")
     xml_compacto = _obtener(flags, "XML_COMPACTO_WS").strip().upper() in ("SI", "S", "1", "TRUE")
+    pdf_mascara = _obtener(flags, "PDF_MASCARA_WS").strip().upper() in ("SI", "S", "1", "TRUE")
 
     hubo_error = False
     for nombre, persona in personas:
@@ -751,12 +805,24 @@ def main(flags: dict) -> None:
 
         if generar_json:
             guardar_json(data, os.path.join(output_dir, f"{base_nombre}.json"))
+
+        ruta_xml_generada = None
         if generar_xml:
-            exportar_a_xml(data, os.path.join(output_dir, f"{base_nombre}.xml"))
+            ruta_xml_generada = exportar_a_xml(data, os.path.join(output_dir, f"{base_nombre}.xml"))
             if xml_compacto:
                 exportar_a_xml(
                     data, os.path.join(output_dir, f"{base_nombre}_plano.xml"), indentado=False
                 )
+
+        if generar_pdf_flag:
+            try:
+                generar_pdf(
+                    data, os.path.join(output_dir, f"{base_nombre}.pdf"),
+                    mascara=pdf_mascara, ruta_xml_existente=ruta_xml_generada,
+                )
+            except ValueError as e:
+                print(f"  ! No se pudo generar el PDF de {nombre}: {e}")
+                hubo_error = True
         print()
 
     print(f"Todo quedó en: {os.path.abspath(output_dir)}")
