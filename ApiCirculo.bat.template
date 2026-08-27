@@ -34,5 +34,8 @@ REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="prod" /API_KEY_WS="TU_API_KEY" /USUARIO_
 REM Ejemplo 5: PDF de demo con identidad ficticia, para mostrar el formato sin exponer datos reales.
 REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="prod" /API_KEY_WS="TU_API_KEY" /USUARIO_WS="TU_USUARIO" /PASS_WS="TU_PASSWORD" /LLAVE_PRIVADA_WS="TU_LLAVE_PRIVADA_EN_HEX" /INPUT_WS="input\persona.json" /ArchivoSalida_WS="PDF" /PDF_MASCARA_WS="SI"
 
+REM Ejemplo 6: nombre de archivo elegido por ti (solo funciona con UNA persona). Tu pones "reportes\juan_perez", el programa agrega .json/.xml/.pdf.
+REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="prod" /API_KEY_WS="TU_API_KEY" /USUARIO_WS="TU_USUARIO" /PASS_WS="TU_PASSWORD" /LLAVE_PRIVADA_WS="TU_LLAVE_PRIVADA_EN_HEX" /INPUT_WS="input\persona.json" /ArchivoSalida_WS="ALL" /NOMBRE_SALIDA_WS="reportes\juan_perez"
+
 REM Linea activa por default: sandbox con la persona de ejemplo, segura, los 3 archivos.
 "%~dp0ApiCirculo.exe" /AMBIENTE_WS="dev" /ArchivoSalida_WS="ALL"

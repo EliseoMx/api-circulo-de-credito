@@ -49,12 +49,24 @@ DEFAULTS_FLAGS más abajo):
                                   no gastar una consulta real sin querer).
 
   Salida:
-    /OUTPUT_WS="output"          Carpeta donde se guardan JSON/XML/PDF/evidencias.
+    /OUTPUT_WS="output"          Carpeta donde se guardan JSON/XML/PDF/evidencias,
+                                  con nombre automático por persona/folio.
     /ArchivoSalida_WS="ALL"      Qué generar: JSON | XML | PDF | ALL (default).
                                   ALL genera los tres. El PDF siempre se arma
                                   a partir del XML (si no pides XML como
                                   salida, se usa uno temporal que se borra
                                   al terminar).
+    /NOMBRE_SALIDA_WS="..."      Nombre (o ruta) SIN extensión para los
+                                  archivos de salida, en vez del nombre
+                                  automático en OUTPUT_WS. Tú pones el
+                                  nombre, el programa agrega .json/.xml/.pdf
+                                  según lo que hayas pedido en
+                                  ArchivoSalida_WS. Puede incluir carpeta,
+                                  ej. "C:\reportes\juan_perez". Solo aplica
+                                  cuando se consulta UNA sola persona en la
+                                  corrida; si hay varias (INPUT_WS con "*"),
+                                  se ignora y se usa el nombre automático de
+                                  OUTPUT_WS para cada una.
     /XML_COMPACTO_WS="NO"        SI genera además el XML en una sola línea.
     /PDF_MASCARA_WS="NO"         SI genera el PDF con identidad ficticia
                                   legible (para demos), en vez de los datos
@@ -168,6 +180,7 @@ DEFAULTS_FLAGS = {
     "INPUT_WS": "",
     "OUTPUT_WS": "output",
     "ARCHIVOSALIDA_WS": "ALL",
+    "NOMBRE_SALIDA_WS": "",
     "XML_COMPACTO_WS": "NO",
     "PDF_MASCARA_WS": "NO",
     "ENDPOINT_WS": "reporte",
@@ -770,6 +783,12 @@ def main(flags: dict) -> None:
     xml_compacto = _obtener(flags, "XML_COMPACTO_WS").strip().upper() in ("SI", "S", "1", "TRUE")
     pdf_mascara = _obtener(flags, "PDF_MASCARA_WS").strip().upper() in ("SI", "S", "1", "TRUE")
 
+    nombre_salida = _obtener(flags, "NOMBRE_SALIDA_WS").strip()
+    if nombre_salida and len(personas) > 1:
+        print(f"  ! NOMBRE_SALIDA_WS se ignora porque hay {len(personas)} personas en esta "
+              f"corrida; se usa el nombre automático dentro de OUTPUT_WS para cada una.\n")
+        nombre_salida = ""
+
     hubo_error = False
     for nombre, persona in personas:
         print(f"--- Consultando: {nombre} ---")
@@ -798,26 +817,32 @@ def main(flags: dict) -> None:
 
         print(json.dumps(data, indent=2, ensure_ascii=False))
 
-        # El folio + el nombre de origen identifican cada corrida, así no se
-        # pisan los archivos entre distintas personas.
-        folio = data.get("folioConsulta") or datetime.now().strftime("%Y%m%d_%H%M%S")
-        base_nombre = f"reporte_credito_{ambiente}_{nombre}_{folio}"
+        if nombre_salida:
+            # El usuario puso el nombre (o ruta) sin extensión; nosotros
+            # agregamos .json/.xml/.pdf según lo que se haya pedido generar.
+            ruta_base = _ruta_junto_al_exe(nombre_salida)
+            carpeta_destino = os.path.dirname(ruta_base)
+            if carpeta_destino:
+                os.makedirs(carpeta_destino, exist_ok=True)
+        else:
+            # El folio + el nombre de origen identifican cada corrida, así
+            # no se pisan los archivos entre distintas personas.
+            folio = data.get("folioConsulta") or datetime.now().strftime("%Y%m%d_%H%M%S")
+            ruta_base = os.path.join(output_dir, f"reporte_credito_{ambiente}_{nombre}_{folio}")
 
         if generar_json:
-            guardar_json(data, os.path.join(output_dir, f"{base_nombre}.json"))
+            guardar_json(data, f"{ruta_base}.json")
 
         ruta_xml_generada = None
         if generar_xml:
-            ruta_xml_generada = exportar_a_xml(data, os.path.join(output_dir, f"{base_nombre}.xml"))
+            ruta_xml_generada = exportar_a_xml(data, f"{ruta_base}.xml")
             if xml_compacto:
-                exportar_a_xml(
-                    data, os.path.join(output_dir, f"{base_nombre}_plano.xml"), indentado=False
-                )
+                exportar_a_xml(data, f"{ruta_base}_plano.xml", indentado=False)
 
         if generar_pdf_flag:
             try:
                 generar_pdf(
-                    data, os.path.join(output_dir, f"{base_nombre}.pdf"),
+                    data, f"{ruta_base}.pdf",
                     mascara=pdf_mascara, ruta_xml_existente=ruta_xml_generada,
                 )
             except ValueError as e:

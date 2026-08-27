@@ -60,8 +60,9 @@ consulta real por accidente.
 
 | Flag | Default | Descripción |
 |---|---|---|
-| `/OUTPUT_WS` | `output` | carpeta donde se guardan JSON/XML/PDF/evidencias |
+| `/OUTPUT_WS` | `output` | carpeta donde se guardan JSON/XML/PDF/evidencias, con nombre automático por persona/folio |
 | `/ArchivoSalida_WS` | `ALL` | `JSON`, `XML`, `PDF` o `ALL` — qué generar |
+| `/NOMBRE_SALIDA_WS` | (vacío) | nombre o ruta **sin extensión** para los archivos, ej. `reportes\juan_perez` → genera `juan_perez.json`/`.xml`/`.pdf`. Tú pones el nombre, el programa agrega la extensión. Solo aplica con UNA persona en la corrida; con varias (`INPUT_WS` con `*`) se ignora y se usa el nombre automático |
 | `/XML_COMPACTO_WS` | `NO` | `SI` genera además el XML en una sola línea |
 | `/PDF_MASCARA_WS` | `NO` | `SI` genera el PDF con identidad ficticia legible (para demos) en vez de los datos reales. Los datos financieros (cuentas, montos, otorgantes) nunca se enmascaran |
 
@@ -104,6 +105,11 @@ REM Producción, los tres archivos (JSON + XML + PDF)
 venv\Scripts\python.exe api_circulo.py /AMBIENTE_WS="prod" /API_KEY_WS="..." ^
     /USUARIO_WS="..." /PASS_WS="..." /LLAVE_PRIVADA_WS="..." ^
     /INPUT_WS="input\persona.json" /ArchivoSalida_WS="ALL"
+
+REM Producción, nombre de archivo elegido por ti (solo con una persona)
+venv\Scripts\python.exe api_circulo.py /AMBIENTE_WS="prod" /API_KEY_WS="..." ^
+    /USUARIO_WS="..." /PASS_WS="..." /LLAVE_PRIVADA_WS="..." ^
+    /INPUT_WS="input\persona.json" /ArchivoSalida_WS="ALL" /NOMBRE_SALIDA_WS="reportes\juan_perez"
 ```
 
 Prueba de firma ECDSA: `/ENDPOINT_WS="securitytest"` (requiere `API_KEY_WS` y `LLAVE_PRIVADA_WS`).
