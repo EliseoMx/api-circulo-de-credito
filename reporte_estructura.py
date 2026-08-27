@@ -148,21 +148,12 @@ class Documento(BaseDocTemplate):
 # ------------------------------------------------------------ bloque de marca
 
 def encabezado_reporte(meta):
-    """Logo (placeholder) + título centrado + metadatos a la derecha."""
-    # Recuadro de marca. Sustituible por Image("logo.png", ...)
-    logo = Table([[Paragraph(f"<b>{EMPRESA}</b>", _p(8, alignment=1,
-                                                     textColor=AZUL))]],
-                 colWidths=[95], rowHeights=[42])
-    logo.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.7, AZUL),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-
+    """Título centrado + metadatos a la derecha (sin logo/marca)."""
     meta_txt = "<br/>".join(
         f"<b>{k}:</b> {v}" for k, v in meta.items()
     )
     fila = Table(
-        [[logo,
+        [["",
           Paragraph("Reporte de Crédito<br/>Consolidado", ST_TITULO),
           Paragraph(meta_txt, ST_META)]],
         colWidths=[110, 265, 180],
