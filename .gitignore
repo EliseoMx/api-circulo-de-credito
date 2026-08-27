@@ -16,3 +16,8 @@ venv/
 build/
 dist/
 *.spec
+
+# Copia real del .bat con tus credenciales (la plantilla sin datos reales,
+# ApiCirculo.bat.template, sí se versiona). Por si la sacas de dist/ a la
+# raíz para editarla.
+/ApiCirculo.bat

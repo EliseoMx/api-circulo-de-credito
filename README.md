@@ -1,9 +1,12 @@
 # API Círculo de Crédito
 
 Cliente para el API "Reporte de Crédito Consolidado + FICO® Score y PLD Check® -
-Personas Físicas" de Círculo de Crédito. Lee la(s) persona(s) a consultar desde
-JSON en `input/`, llama al API (sandbox o producción) y guarda la respuesta como
-JSON crudo y como XML (formato clásico del buró) en `output/`.
+Personas Físicas" de Círculo de Crédito. Se controla con flags de línea de
+comandos estilo `/CLAVE_WS="valor"` (igual que `BURO_DE_CREDITO.exe`), para
+poder llamarlo desde un `.bat` igual que otras integraciones internas.
+
+No usa `.env` ni escanea ninguna carpeta de entrada solo: cada flag tiene un
+default en el código, y se sobreescribe solo si lo pasas al ejecutar.
 
 ## 1. Instalación (con Python)
 
@@ -14,100 +17,119 @@ python -m venv venv
 venv\Scripts\pip install -r requirements.txt
 ```
 
-Copia tu `.env` (o créalo a partir de las variables de abajo) en esta misma
-carpeta, junto a `api_circulo.py`. **Nunca lo subas a git** — ya está listado
-en `.gitignore`.
+## 2. Uso — flags disponibles
 
-### Variables de entorno (`.env`)
+Todos son opcionales.
 
-```
-# Requerido para dev y prod
-CDC_API_KEY=...
+**Conexión / credenciales:**
 
-# Requerido solo para producción
-CDC_PRIVATE_KEY_D=...
-CDC_USERNAME=...
-CDC_PASSWORD=...
+| Flag | Default | Descripción |
+|---|---|---|
+| `/AMBIENTE_WS` | `dev` | `dev` o `prod` |
+| `/API_KEY_WS` | (vacío) | tu `x-api-key`. Requerido en dev y prod |
+| `/USUARIO_WS` | (vacío) | usuario Círculo de Crédito. Requerido en prod |
+| `/PASS_WS` | (vacío) | contraseña. Requerido en prod |
+| `/LLAVE_PRIVADA_WS` | (vacío) | valor `priv` de tu llave ECDSA en hex. Requerido en prod |
+| `/LLAVE_PUBLICA_WS` | (vacío) | llave pública de Círculo de Crédito, en hex (opcional, valida la firma de la respuesta) |
 
-# Opcional: verifica la firma que regresa Círculo de Crédito
-CDC_PUBLIC_KEY_XY=...
+**Persona a consultar** (si no usas `/INPUT_WS`, se arma con estos flags):
 
-# Opcional: dónde buscar el input y guardar el output.
-# Relativas (a la carpeta del script/.exe) o absolutas.
-CDC_INPUT_DIR=input
-CDC_OUTPUT_DIR=output
+`/Nombre_primerNombre_WS`, `/Nombre_segundoNombre_WS`, `/Nombre_apellidoPaterno_WS`,
+`/Nombre_apellidoMaterno_WS`, `/Nombre_RFC_WS`, `/Nombre_fechaNacimiento_WS` (AAAA-MM-DD),
+`/Nombre_nacionalidad_WS` (default `MX`), `/Domicilio_direccion1_WS`, `/Domicilio_colonia_WS`,
+`/Domicilio_municipio_WS`, `/Domicilio_ciudad_WS`, `/Domicilio_estado_WS`, `/Domicilio_CP_WS`
 
-# Opcional: 1 = la consola espera un ENTER antes de cerrarse (recomendado
-# para el .exe con doble clic, así ves el resultado antes de que se cierre
-# la ventana). 0 = no espera. Sin definir: el .exe espera solo, el script
-# de Python no (la terminal ya se queda abierta).
-CDC_PAUSAR_AL_TERMINAR=1
-```
+**Entrada por archivo** (alternativa a los flags de arriba):
 
-## 2. Uso
+| Flag | Descripción |
+|---|---|
+| `/INPUT_WS="persona.json"` | un solo JSON con la persona |
+| `/INPUT_WS="input\*.json"` | con `*`, procesa TODOS los que hagan match, uno por uno |
+
+Si no pasas ni `/INPUT_WS` ni ningún flag de persona, usa una persona de
+ejemplo del sandbox y **fuerza `AMBIENTE_WS=dev`**, para no gastar una
+consulta real por accidente.
+
+**Salida:**
+
+| Flag | Default | Descripción |
+|---|---|---|
+| `/OUTPUT_WS` | `output` | carpeta donde se guardan JSON/XML/evidencias |
+| `/ArchivoSalida_WS` | `JSON_Y_XML` | `JSON`, `XML` o `JSON_Y_XML` (no genera PDF) |
+| `/XML_COMPACTO_WS` | `NO` | `SI` genera además el XML en una sola línea |
+
+**Otros:**
+
+| Flag | Default | Descripción |
+|---|---|---|
+| `/ENDPOINT_WS` | `reporte` | `reporte` o `securitytest` |
+| `/PAUSAR_WS` | (auto) | `SI`/`NO`. Sin definir: pausa solo si es el `.exe` |
+
+Todas las rutas relativas (`INPUT_WS`, `OUTPUT_WS`) se resuelven contra la
+carpeta del `.exe`/script, nunca contra el directorio de trabajo actual.
+
+### Ejemplos
 
 ```bash
+REM Sandbox, persona de ejemplo (sin flags)
 venv\Scripts\python.exe api_circulo.py
+
+REM Producción, un archivo
+venv\Scripts\python.exe api_circulo.py /AMBIENTE_WS="prod" /API_KEY_WS="..." ^
+    /USUARIO_WS="..." /PASS_WS="..." /LLAVE_PRIVADA_WS="..." /INPUT_WS="input\persona.json"
+
+REM Producción, varios archivos de un jalón
+venv\Scripts\python.exe api_circulo.py /AMBIENTE_WS="prod" /API_KEY_WS="..." ^
+    /USUARIO_WS="..." /PASS_WS="..." /LLAVE_PRIVADA_WS="..." /INPUT_WS="input\*.json"
 ```
 
-El script decide el ambiente solo, según lo que encuentre en `input/`:
-
-- **`input/` vacía** → usa una persona de ejemplo del sandbox y consulta en
-  **DEV**. Sirve para confirmar que todo sigue funcionando sin gastar una
-  consulta real.
-- **`input/` con uno o varios `.json`** → consulta CADA UNO en
-  **PRODUCCIÓN**, y genera su propio `reporte_credito_prod_<archivo>_<folio>.json`
-  y `.xml` en `output/`.
-
-Para forzar el ambiente sin depender de lo que haya en `input/`:
-
-```bash
-venv\Scripts\python.exe api_circulo.py --env dev
-venv\Scripts\python.exe api_circulo.py --env prod
-```
-
-Otras opciones útiles: `--input <archivo>` (consulta un solo JSON puntual),
-`--output <carpeta>`, `--sin-xml`, `--xml-compacto`, `--endpoint securitytest`
-(prueba tu firma ECDSA contra `/v1/securitytest`).
+Prueba de firma ECDSA: `/ENDPOINT_WS="securitytest"` (requiere `API_KEY_WS` y `LLAVE_PRIVADA_WS`).
 
 ## 3. Generar el .exe
 
-El `.exe` es standalone (no necesita Python instalado en la máquina destino);
-solo necesita su propio `.env` al lado para saber con qué credenciales correr.
+El `.exe` es standalone (no necesita Python instalado en la máquina destino).
 
 ```bash
 venv\Scripts\pip install pyinstaller
 build_exe.bat
 ```
 
-`build_exe.bat` corre PyInstaller con los flags correctos y deja el
-ejecutable en `dist\ApiCirculo.exe`.
+Esto deja en `dist\`:
 
-### Para distribuir el .exe a otra máquina
+- **`ApiCirculo.exe`** — el ejecutable
+- **`ApiCirculo.bat`** — copia de `ApiCirculo.bat.template` con ejemplos de
+  invocación, lista para que rellenes tus credenciales y datos reales
+
+`build_exe.bat` NO sobreescribe `dist\ApiCirculo.bat` si ya existe, para no
+borrarte una copia que ya editaste con tus credenciales.
+
+### Para distribuir a otra máquina
 
 Copia junto al `.exe`:
 
-- `.env` (con las credenciales de esa máquina/ambiente)
-- opcionalmente `input\` y `output\` — si no existen, el .exe las crea solo
-
 ```
 ApiCirculo.exe
-.env
-input\
-output\
+ApiCirculo.bat      (con tus credenciales y datos ya editados)
+input\              (opcional, si usas /INPUT_WS)
 ```
 
-El `.exe` siempre busca su `.env` y sus carpetas `input`/`output` **junto a
-sí mismo**, sin importar desde dónde lo ejecutes (doble clic, acceso directo,
-cmd en otra carpeta) — nunca según el directorio de trabajo actual.
+El `.exe` siempre busca `input`/`output` **junto a sí mismo**, sin importar
+desde dónde lo ejecutes (doble clic, acceso directo, cmd en otra carpeta) —
+nunca según el directorio de trabajo actual.
 
-Corre igual que el script:
+### Importante sobre credenciales y git
 
-```bash
-ApiCirculo.exe
-ApiCirculo.exe --env dev
-```
+`api_circulo.py` (el código fuente, versionado) trae los defaults de
+credenciales **en blanco a propósito** — nunca debe llevar tu API key,
+usuario, password o llave privada reales, porque ese archivo está en GitHub.
+
+Los valores reales van **solo** en tu copia de `dist\ApiCirculo.bat`, que
+está excluida del repo por `.gitignore` (junto con toda la carpeta `dist/`).
+Nunca edites `ApiCirculo.bat.template` (la plantilla versionada) con datos
+reales, y nunca subas manualmente una copia de `ApiCirculo.bat` con
+credenciales a git.
 
 ### Reconstruir el .exe después de cambios
 
-Vuelve a correr `build_exe.bat`. Se sobrescribe `dist\ApiCirculo.exe`.
+Vuelve a correr `build_exe.bat`. Se sobrescribe `dist\ApiCirculo.exe`
+(tu `dist\ApiCirculo.bat` con credenciales reales queda intacto).
