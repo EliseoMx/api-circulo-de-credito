@@ -45,6 +45,16 @@ Todos son opcionales.
 `/Nombre_nacionalidad_WS` (default `MX`), `/Domicilio_direccion1_WS`, `/Domicilio_colonia_WS`,
 `/Domicilio_municipio_WS`, `/Domicilio_ciudad_WS`, `/Domicilio_estado_WS`, `/Domicilio_CP_WS`
 
+> **⚠️ Nunca pongas acentos ni "ñ" en valores de flags dentro de un `.bat`.**
+> Un solo carácter así (á, é, í, ó, ú, Ñ/ñ) hace que Windows deje de reconocer
+> **todo** el archivo `.bat` (no solo esa línea — el archivo completo truena
+> con "no se reconoce como un comando"). Si el nombre o domicilio de la
+> persona lleva acentos o "ñ" (lo normal en español), usa
+> `/INPUT_WS="archivo.json"` en su lugar: el JSON sí soporta acentos sin
+> ningún problema, porque lo lee Python, no `cmd.exe`. Esta limitación es
+> solo del `.bat`; si corres el `.exe`/script directo desde PowerShell o
+> pasas los datos por un `.json`, los acentos funcionan normal.
+
 **Entrada por archivo** (alternativa a los flags de arriba):
 
 | Flag | Descripción |
