@@ -83,9 +83,11 @@ DEFAULTS_FLAGS más abajo):
                                   XML de origen, con el mismo nombre.
                                   Respeta /PDF_MASCARA_WS. No necesita
                                   credenciales de ningún tipo.
-    /PAUSAR_WS=""                SI/NO. Sin definir: pausa solo si es el .exe
-                                  compilado, para que no se cierre la
-                                  consola antes de leer el resultado.
+    /PAUSAR_WS="NO"              Default NO: nunca deja la consola esperando
+                                  un ENTER, ni siquiera en el .exe. Pásalo
+                                  como "SI" para que sí espere (util si
+                                  quieres leer el resultado antes de que se
+                                  cierre la ventana con doble clic).
 
 Todas las rutas relativas (INPUT_WS, OUTPUT_WS) se resuelven contra la
 carpeta del .exe/script, nunca contra el directorio de trabajo actual.
@@ -191,7 +193,7 @@ DEFAULTS_FLAGS = {
     "XML_COMPACTO_WS": "NO",
     "PDF_MASCARA_WS": "NO",
     "ENDPOINT_WS": "reporte",
-    "PAUSAR_WS": "",
+    "PAUSAR_WS": "NO",
 }
 
 # Flags que identifican que SÍ se quiere armar una persona a mano (no cuenta
@@ -745,20 +747,12 @@ def generar_pdf(data: dict, ruta_pdf: str, mascara: bool = False,
 
 def _debe_pausar_al_terminar(flags: dict) -> bool:
     """
-    PAUSAR_WS controla si la consola espera un ENTER antes de cerrarse (para
-    poder leer el resultado cuando corres el .exe con doble clic).
-
-    - "SI"/"1" -> siempre pausa. "NO"/"0" -> nunca pausa.
-    - sin definir -> pausa solo si es el .exe compilado (sys.frozen); si
-      corres "python api_circulo.py" desde una terminal, esa terminal ya
-      se queda abierta sola.
+    PAUSAR_WS controla si la consola espera un ENTER antes de cerrarse.
+    Default: NO (nunca pausa, ni siquiera en el .exe). Solo pausa si pasas
+    explícitamente /PAUSAR_WS="SI".
     """
     valor = flags.get("PAUSAR_WS", "").strip().upper()
-    if valor in ("SI", "S", "1", "TRUE"):
-        return True
-    if valor in ("NO", "N", "0", "FALSE"):
-        return False
-    return getattr(sys, "frozen", False)
+    return valor in ("SI", "S", "1", "TRUE")
 
 
 def main(flags: dict) -> None:
