@@ -1,63 +1,113 @@
-"""
-Cliente Python para el API "Reporte de Crédito Consolidado + FICO® Score y
-PLD Check® - Personas Físicas" de Círculo de Crédito.
+r"""
+Cliente para el API "Reporte de Crédito Consolidado + FICO® Score y PLD
+Check® - Personas Físicas" de Círculo de Crédito.
 
-Flujo:
-    1. Corres el script:  python api_circulo.py
-
-    2. El script revisa la carpeta input/:
-       - Si NO hay ningún .json ahí, usa la persona de ejemplo del sandbox
-         (la de siempre) y consulta en DEV. Sirve para probar que todo
-         sigue funcionando sin arriesgar una consulta pagada.
-       - Si HAY uno o varios .json, consulta CADA UNO en PRODUCCIÓN y
-         genera su propio JSON + XML de salida.
-
-    El ambiente se puede forzar con --env dev / --env prod si quieres
-    saltarte la detección automática.
-
-    3. La respuesta de cada persona queda en output/: el JSON crudo del
-       API y el XML en el formato clásico del buró
-       (<Respuesta><Personas><Persona>...).
+Se controla por flags de línea de comandos estilo /CLAVE_WS="valor" (igual
+que BURO_DE_CREDITO.exe), para poder llamarlo desde un .bat exactamente como
+ya se hace con otras integraciones. NO usa .env ni escanea ninguna carpeta
+de entrada solo: cada flag tiene un default en este archivo, y se sobreescribe
+solo si lo pasas al ejecutar.
 
 --------------------------------------------------------------------------
-VARIABLES DE ENTORNO (van en el archivo .env de esta carpeta, nunca en el
-código):
+FLAGS DISPONIBLES (todos opcionales; sin ellos, se usan los defaults de
+DEFAULTS_FLAGS más abajo):
 
-  Para AMBOS ambientes:
-    CDC_API_KEY          -> tu x-api-key
+  Conexión / credenciales:
+    /AMBIENTE_WS="dev|prod"      Ambiente a consultar. Default: dev.
+    /API_KEY_WS="..."            Tu x-api-key. Requerido en dev y prod.
+    /USUARIO_WS="..."            Usuario Círculo de Crédito. Requerido en prod.
+    /PASS_WS="..."               Contraseña. Requerido en prod.
+    /LLAVE_PRIVADA_WS="..."      Valor 'priv' de tu llave ECDSA en hex.
+                                  Requerido en prod (firma el request).
+    /LLAVE_PUBLICA_WS="..."      Llave pública de Círculo de Crédito, en hex
+                                  (opcional; si la pasas, se valida la firma
+                                  x-signature que ellos regresan en prod).
 
-  Solo para --env prod (además de CDC_API_KEY):
-    CDC_PRIVATE_KEY_D     -> valor 'priv' de tu llave ECDSA, en hex, una sola
-                             línea (openssl ec -in pri_key.pem -noout -text)
-    CDC_USERNAME          -> usuario de Círculo de Crédito
-    CDC_PASSWORD          -> contraseña de Círculo de Crédito
-    CDC_PUBLIC_KEY_XY     -> (opcional) llave pública de Círculo de Crédito,
-                             para verificar la firma que ellos regresan
+  Persona a consultar (si no pasas INPUT_WS, arma la persona con estos):
+    /Nombre_primerNombre_WS="..."
+    /Nombre_segundoNombre_WS="..."
+    /Nombre_apellidoPaterno_WS="..."
+    /Nombre_apellidoMaterno_WS="..."
+    /Nombre_RFC_WS="..."
+    /Nombre_fechaNacimiento_WS="AAAA-MM-DD"
+    /Nombre_nacionalidad_WS="MX"          Default: MX.
+    /Domicilio_direccion1_WS="..."
+    /Domicilio_colonia_WS="..."
+    /Domicilio_municipio_WS="..."
+    /Domicilio_ciudad_WS="..."
+    /Domicilio_estado_WS="..."
+    /Domicilio_CP_WS="..."
 
-  Opcionales, para cambiar dónde se leen/escriben los archivos:
-    CDC_INPUT_DIR          -> carpeta donde se buscan los .json de entrada
-                               (default: input)
-    CDC_OUTPUT_DIR         -> carpeta donde se guardan JSON/XML/evidencias
-                               (default: output)
-                               Los flags --input y --output, si se pasan,
-                               tienen prioridad sobre estas variables.
+  Entrada por archivo (alternativa a los flags de arriba):
+    /INPUT_WS="persona.json"     Un solo JSON con la persona.
+    /INPUT_WS="input\*.json"     Con "*", procesa TODOS los que hagan match,
+                                  uno por uno, cada quien con su propio
+                                  reporte de salida.
+                                  Si no pasas ni INPUT_WS ni ningún flag de
+                                  persona, se usa una persona de ejemplo del
+                                  sandbox (y se fuerza AMBIENTE_WS=dev, para
+                                  no gastar una consulta real sin querer).
 
-  Opcional, para que la consola no se cierre sola al terminar:
-    CDC_PAUSAR_AL_TERMINAR -> "1" espera un ENTER antes de cerrar, "0" no
-                               espera. Sin definir: espera solo si es el
-                               .exe compilado.
+  Salida:
+    /OUTPUT_WS="output"          Carpeta donde se guardan JSON/XML/PDF/evidencias,
+                                  con nombre automático por persona/folio.
+    /ArchivoSalida_WS="ALL"      Qué generar: JSON | XML | PDF | ALL (default).
+                                  ALL genera los tres. El PDF siempre se arma
+                                  a partir del XML (si no pides XML como
+                                  salida, se usa uno temporal que se borra
+                                  al terminar).
+    /NOMBRE_SALIDA_WS="..."      Nombre (o ruta) SIN extensión para los
+                                  archivos de salida, en vez del nombre
+                                  automático en OUTPUT_WS. Tú pones el
+                                  nombre, el programa agrega .json/.xml/.pdf
+                                  según lo que hayas pedido en
+                                  ArchivoSalida_WS. Puede incluir carpeta,
+                                  ej. "C:\reportes\juan_perez". Solo aplica
+                                  cuando se consulta UNA sola persona en la
+                                  corrida; si hay varias (INPUT_WS con "*"),
+                                  se ignora y se usa el nombre automático de
+                                  OUTPUT_WS para cada una.
+    /XML_COMPACTO_WS="NO"        SI genera además el XML en una sola línea.
+    /PDF_MASCARA_WS="NO"         SI genera el PDF con identidad ficticia
+                                  legible (para demos), en vez de los datos
+                                  reales de la persona. Los datos financieros
+                                  (cuentas, montos, otorgantes) nunca se
+                                  enmascaran.
+
+  Otros:
+    /ENDPOINT_WS="reporte"       reporte (default) | securitytest | xml2pdf.
+                                  xml2pdf NO llama al API: solo convierte
+                                  XML(s) que ya tienes en disco a PDF. Usa
+                                  /INPUT_WS="archivo.xml" (o "carpeta\*.xml"
+                                  para varios) y deja el .pdf junto a cada
+                                  XML de origen, con el mismo nombre.
+                                  Respeta /PDF_MASCARA_WS. No necesita
+                                  credenciales de ningún tipo.
+    /PAUSAR_WS="NO"              Default NO: nunca deja la consola esperando
+                                  un ENTER, ni siquiera en el .exe. Pásalo
+                                  como "SI" para que sí espere (util si
+                                  quieres leer el resultado antes de que se
+                                  cierre la ventana con doble clic).
+
+Todas las rutas relativas (INPUT_WS, OUTPUT_WS) se resuelven contra la
+carpeta del .exe/script, nunca contra el directorio de trabajo actual.
+
+Ejemplo (ver también ApiCirculo.bat.template):
+    ApiCirculo.exe /AMBIENTE_WS="prod" /API_KEY_WS="..." /USUARIO_WS="..." ^
+        /PASS_WS="..." /LLAVE_PRIVADA_WS="..." /INPUT_WS="input\*.json"
 
 --------------------------------------------------------------------------
-Instalación (una sola vez):
+Instalación (una sola vez, para correr como script de Python):
     python -m venv venv
-    venv\\Scripts\\pip install -r requirements.txt
+    venv\Scripts\pip install -r requirements.txt
 """
 
-import argparse
+import glob
 import hashlib
 import json
 import os
 import sys
+import tempfile
 from datetime import datetime
 from xml.sax.saxutils import escape as _escape_xml
 
@@ -65,27 +115,17 @@ import requests
 from ecdsa import SigningKey, VerifyingKey, NIST384p, BadSignatureError
 from ecdsa.util import sigencode_der, sigdecode_der
 
-# Carpeta donde vive el .env: la del .exe cuando está compilado con
-# PyInstaller (sys.frozen), o la del propio script cuando corres con
-# "python api_circulo.py". Así el .exe siempre busca el .env justo al lado
-# de sí mismo, sin importar desde dónde lo lances (doble clic, acceso
-# directo, cmd en otra carpeta, etc.) — nunca según el directorio de trabajo.
+import xml_a_pdf
+
+# Carpeta donde vive el .exe cuando está compilado con PyInstaller
+# (sys.frozen), o la del propio script cuando corres "python api_circulo.py".
+# Así siempre resuelve rutas relativas (INPUT_WS, OUTPUT_WS) contra su propia
+# ubicación, sin importar desde dónde lo lances (doble clic, acceso directo,
+# cmd en otra carpeta) — nunca según el directorio de trabajo actual.
 if getattr(sys, "frozen", False):
     BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv(os.path.join(BASE_DIR, ".env"))
-except ImportError:
-    print(
-        "Aviso: no está instalado python-dotenv, así que no se cargó ningún "
-        "archivo .env automáticamente. Instálalo con:\n"
-        "  pip install python-dotenv\n"
-        "o define las variables de entorno manualmente antes de correr el script.\n"
-    )
 
 URLS = {
     "dev": "https://services.circulodecredito.com.mx/sandbox/v1/rcc-ficoscore-pld",
@@ -95,19 +135,16 @@ SECURITY_TEST_URL = "https://services.circulodecredito.com.mx/v1/securitytest"
 
 
 def _ruta_junto_al_exe(ruta: str) -> str:
-    """Resuelve rutas relativas (input, output, etc.) contra BASE_DIR en vez
-    del directorio de trabajo actual, para que el .exe funcione igual sin
-    importar desde dónde se ejecute."""
+    """Resuelve rutas relativas contra BASE_DIR en vez del directorio de
+    trabajo actual, para que el .exe funcione igual sin importar desde
+    dónde se ejecute."""
     return ruta if os.path.isabs(ruta) else os.path.join(BASE_DIR, ruta)
 
 
-CARPETA_INPUT = _ruta_junto_al_exe(os.environ.get("CDC_INPUT_DIR") or "input")
-CARPETA_OUTPUT = _ruta_junto_al_exe(os.environ.get("CDC_OUTPUT_DIR") or "output")
-
 # Persona de ejemplo del sandbox (apellidoPaterno "SESENTAYDOS" -> Full
-# Report, Status 200). Se usa como fallback SOLO cuando input/ está vacía,
-# para poder probar que el script sigue funcionando sin gastar una consulta
-# real en producción.
+# Report, Status 200). Se usa SOLO cuando no se pasa ni INPUT_WS ni ningún
+# flag de persona, para poder probar que el .exe sigue funcionando sin
+# arriesgar una consulta real.
 PERSONA_EJEMPLO = {
     "apellidoPaterno": "SESENTAYDOS",
     "apellidoMaterno": "PRUEBA",
@@ -125,6 +162,76 @@ PERSONA_EJEMPLO = {
     },
 }
 
+# Defaults de cada flag. Deliberadamente en blanco para credenciales: este
+# archivo se sube a GitHub, así que nunca debe llevar API keys/usuarios/
+# contraseñas reales. Los valores reales van en tu copia local del .bat
+# (dist\ApiCirculo.bat), que está excluida del repo por .gitignore.
+DEFAULTS_FLAGS = {
+    "AMBIENTE_WS": "dev",
+    "API_KEY_WS": "",
+    "USUARIO_WS": "",
+    "PASS_WS": "",
+    "LLAVE_PRIVADA_WS": "",
+    "LLAVE_PUBLICA_WS": "",
+    "NOMBRE_PRIMERNOMBRE_WS": "",
+    "NOMBRE_SEGUNDONOMBRE_WS": "",
+    "NOMBRE_APELLIDOPATERNO_WS": "",
+    "NOMBRE_APELLIDOMATERNO_WS": "",
+    "NOMBRE_RFC_WS": "",
+    "NOMBRE_FECHANACIMIENTO_WS": "",
+    "NOMBRE_NACIONALIDAD_WS": "MX",
+    "DOMICILIO_DIRECCION1_WS": "",
+    "DOMICILIO_COLONIA_WS": "",
+    "DOMICILIO_MUNICIPIO_WS": "",
+    "DOMICILIO_CIUDAD_WS": "",
+    "DOMICILIO_ESTADO_WS": "",
+    "DOMICILIO_CP_WS": "",
+    "INPUT_WS": "",
+    "OUTPUT_WS": "output",
+    "ARCHIVOSALIDA_WS": "ALL",
+    "NOMBRE_SALIDA_WS": "",
+    "XML_COMPACTO_WS": "NO",
+    "PDF_MASCARA_WS": "NO",
+    "ENDPOINT_WS": "reporte",
+    "PAUSAR_WS": "NO",
+}
+
+# Flags que identifican que SÍ se quiere armar una persona a mano (no cuenta
+# NOMBRE_NACIONALIDAD_WS porque siempre trae un default no vacío).
+_FLAGS_DE_PERSONA = [
+    "NOMBRE_PRIMERNOMBRE_WS", "NOMBRE_SEGUNDONOMBRE_WS", "NOMBRE_APELLIDOPATERNO_WS",
+    "NOMBRE_APELLIDOMATERNO_WS", "NOMBRE_RFC_WS", "NOMBRE_FECHANACIMIENTO_WS",
+    "DOMICILIO_DIRECCION1_WS", "DOMICILIO_COLONIA_WS", "DOMICILIO_MUNICIPIO_WS",
+    "DOMICILIO_CIUDAD_WS", "DOMICILIO_ESTADO_WS", "DOMICILIO_CP_WS",
+]
+
+
+# ---------------------------------------------------------------------------
+# Parser de flags estilo /CLAVE_WS="valor" (como BURO_DE_CREDITO.exe)
+# ---------------------------------------------------------------------------
+
+def _parsear_flags_estilo_ws(argv: list) -> dict:
+    """
+    Convierte ["/AMBIENTE_WS=prod", '/USUARIO_WS="mi usuario"', ...] en
+    {"AMBIENTE_WS": "prod", "USUARIO_WS": "mi usuario", ...}.
+    Ignora cualquier token que no empiece con "/" o no tenga "=".
+    Las claves se guardan en MAYÚSCULAS (case-insensitive al escribirlas).
+    """
+    flags = {}
+    for token in argv:
+        if not token.startswith("/") or "=" not in token:
+            continue
+        clave, _, valor = token[1:].partition("=")
+        valor = valor.strip()
+        if len(valor) >= 2 and valor[0] == valor[-1] == '"':
+            valor = valor[1:-1]
+        flags[clave.strip().upper()] = valor
+    return flags
+
+
+def _obtener(flags: dict, clave: str) -> str:
+    return flags.get(clave, DEFAULTS_FLAGS[clave])
+
 
 # ---------------------------------------------------------------------------
 # Entrada: JSON de la(s) persona(s) a consultar
@@ -135,41 +242,105 @@ def cargar_persona(ruta: str) -> dict:
         return json.load(f)
 
 
-def listar_personas(carpeta_input: str):
+def _hay_datos_de_persona_en_flags(flags: dict) -> bool:
+    return any(flags.get(clave) for clave in _FLAGS_DE_PERSONA)
+
+
+def _persona_desde_flags(flags: dict) -> dict:
+    persona = {
+        "primerNombre": _obtener(flags, "NOMBRE_PRIMERNOMBRE_WS"),
+        "segundoNombre": _obtener(flags, "NOMBRE_SEGUNDONOMBRE_WS"),
+        "apellidoPaterno": _obtener(flags, "NOMBRE_APELLIDOPATERNO_WS"),
+        "apellidoMaterno": _obtener(flags, "NOMBRE_APELLIDOMATERNO_WS"),
+        "RFC": _obtener(flags, "NOMBRE_RFC_WS"),
+        "fechaNacimiento": _obtener(flags, "NOMBRE_FECHANACIMIENTO_WS"),
+        "nacionalidad": _obtener(flags, "NOMBRE_NACIONALIDAD_WS"),
+        "domicilio": {
+            "direccion": _obtener(flags, "DOMICILIO_DIRECCION1_WS"),
+            "coloniaPoblacion": _obtener(flags, "DOMICILIO_COLONIA_WS"),
+            "delegacionMunicipio": _obtener(flags, "DOMICILIO_MUNICIPIO_WS"),
+            "ciudad": _obtener(flags, "DOMICILIO_CIUDAD_WS"),
+            "estado": _obtener(flags, "DOMICILIO_ESTADO_WS"),
+            "CP": _obtener(flags, "DOMICILIO_CP_WS"),
+        },
+    }
+    # No mandar al API campos vacíos que no se llenaron.
+    persona = {k: v for k, v in persona.items() if v not in ("", None)}
+    domicilio = {k: v for k, v in persona.get("domicilio", {}).items() if v not in ("", None)}
+    if domicilio:
+        persona["domicilio"] = domicilio
+    else:
+        persona.pop("domicilio", None)
+    return persona
+
+
+def _resolver_personas(flags: dict):
     """
     Devuelve (lista_de_(nombre, persona_dict), usando_ejemplo).
 
-    - Si carpeta_input no existe o no tiene ningún .json: [("ejemplo",
-      PERSONA_EJEMPLO)], True.
-    - Si tiene uno o varios .json: uno por archivo (nombre = nombre del
-      archivo sin extensión), False.
+    - INPUT_WS con "*" -> uno por cada archivo que haga match.
+    - INPUT_WS sin "*"  -> ese único archivo.
+    - Sin INPUT_WS pero con flags Nombre_*/Domicilio_* -> una persona armada
+      con esos flags.
+    - Sin nada de lo anterior -> persona de ejemplo del sandbox.
     """
-    archivos = []
-    if os.path.isdir(carpeta_input):
-        archivos = sorted(
-            f for f in os.listdir(carpeta_input) if f.lower().endswith(".json")
+    input_ws = _obtener(flags, "INPUT_WS").strip()
+    if input_ws:
+        patron = _ruta_junto_al_exe(input_ws)
+        es_patron = any(c in input_ws for c in "*?[")
+        rutas = sorted(glob.glob(patron)) if es_patron else [patron]
+        if not rutas:
+            raise RuntimeError(f'No encontré ningún archivo con INPUT_WS="{input_ws}".')
+
+        personas = []
+        for ruta in rutas:
+            nombre = os.path.splitext(os.path.basename(ruta))[0]
+            try:
+                personas.append((nombre, cargar_persona(ruta)))
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"  ! No pude leer {ruta}: {e}")
+        if not personas:
+            raise RuntimeError("Ningún archivo de INPUT_WS se pudo leer correctamente.")
+        return personas, False
+
+    if _hay_datos_de_persona_en_flags(flags):
+        return [("persona", _persona_desde_flags(flags))], False
+
+    return [("ejemplo", PERSONA_EJEMPLO)], True
+
+
+def _resolver_rutas_xml(flags: dict) -> list:
+    """
+    Para ENDPOINT_WS="xml2pdf": resuelve INPUT_WS a una lista de rutas .xml
+    ya existentes en disco (no llama al API en absoluto).
+
+    - INPUT_WS="archivo.xml"        -> ese único archivo.
+    - INPUT_WS="carpeta\\*.xml"      -> todos los que hagan match.
+    """
+    input_ws = _obtener(flags, "INPUT_WS").strip()
+    if not input_ws:
+        raise RuntimeError(
+            'ENDPOINT_WS="xml2pdf" necesita /INPUT_WS="archivo.xml" '
+            '(o "carpeta\\*.xml" para varios).'
         )
-
-    if not archivos:
-        return [("ejemplo", PERSONA_EJEMPLO)], True
-
-    personas = []
-    for nombre_archivo in archivos:
-        ruta = os.path.join(carpeta_input, nombre_archivo)
-        nombre = os.path.splitext(nombre_archivo)[0]
-        personas.append((nombre, cargar_persona(ruta)))
-    return personas, False
+    patron = _ruta_junto_al_exe(input_ws)
+    es_patron = any(c in input_ws for c in "*?[")
+    rutas = sorted(glob.glob(patron)) if es_patron else [patron]
+    if not rutas:
+        raise RuntimeError(f'No encontré ningún archivo con INPUT_WS="{input_ws}".')
+    return rutas
 
 
 # ---------------------------------------------------------------------------
 # Evidencia de request/response (para la solicitud de acceso productivo)
 # ---------------------------------------------------------------------------
 
-def guardar_evidencia(nombre: str, headers_enviados: dict, body_enviado: str,
-                       resp: requests.Response, carpeta_output: str) -> None:
-    carpeta = os.path.join(carpeta_output, "evidencias")
-    os.makedirs(carpeta, exist_ok=True)
-
+def guardar_evidencia(ruta_log: str, headers_enviados: dict, body_enviado: str,
+                       resp: requests.Response) -> None:
+    """Guarda el request/response completos en `ruta_log` (.log), tal cual
+    se le pase — el llamador decide el nombre y la carpeta (normalmente el
+    mismo nombre base que el JSON/XML/PDF de esa consulta, sin subcarpeta
+    aparte)."""
     headers_seguros = dict(headers_enviados)
     for campo_sensible in ("password", "x-api-key"):
         if campo_sensible in headers_seguros:
@@ -186,19 +357,20 @@ def guardar_evidencia(nombre: str, headers_enviados: dict, body_enviado: str,
         f"Headers: {json.dumps(dict(resp.headers), indent=2, ensure_ascii=False)}\n"
         f"Body:\n{resp.text}\n"
     )
-    ruta = os.path.join(carpeta, f"{nombre}.txt")
-    with open(ruta, "w", encoding="utf-8") as f:
+    ruta_log = ruta_libre(ruta_log)
+    with open(ruta_log, "w", encoding="utf-8") as f:
         f.write(contenido)
-    print(f"Evidencia guardada en: {os.path.abspath(ruta)}")
+    print(f"Evidencia guardada en: {os.path.abspath(ruta_log)}")
 
 
-def probar_security_test(carpeta_output: str) -> requests.Response:
-    api_key = os.environ.get("CDC_API_KEY")
+def probar_security_test(carpeta_output: str, api_key: str, private_key_hex: str) -> requests.Response:
     if not api_key:
-        raise RuntimeError("Falta la variable de entorno CDC_API_KEY.")
+        raise RuntimeError("Falta API_KEY_WS.")
+    if not private_key_hex:
+        raise RuntimeError("Falta LLAVE_PRIVADA_WS.")
 
     body_str = json.dumps({"attribute": "Hello World!"}, separators=(",", ":"))
-    signature = firmar_request(body_str)
+    signature = firmar_request(body_str, private_key_hex)
     headers = {
         "x-api-key": api_key,
         "x-signature": signature,
@@ -207,7 +379,7 @@ def probar_security_test(carpeta_output: str) -> requests.Response:
     resp = requests.post(
         SECURITY_TEST_URL, headers=headers, data=body_str.encode("utf-8"), timeout=30
     )
-    guardar_evidencia("securitytest", headers, body_str, resp, carpeta_output)
+    guardar_evidencia(os.path.join(carpeta_output, "securitytest.log"), headers, body_str, resp)
     return resp
 
 
@@ -215,17 +387,16 @@ def probar_security_test(carpeta_output: str) -> requests.Response:
 # Firma ECDSA (solo se usa en producción)
 # ---------------------------------------------------------------------------
 
-def _private_key_from_env(var_name: str = "CDC_PRIVATE_KEY_D") -> SigningKey:
-    hex_d = os.environ.get(var_name)
+def _signing_key_from_hex(hex_d: str) -> SigningKey:
     if not hex_d:
-        raise RuntimeError(f"Falta la variable de entorno {var_name}.")
+        raise RuntimeError("Falta LLAVE_PRIVADA_WS.")
     hex_d = hex_d.strip().replace(":", "").replace("\n", "").replace(" ", "")
     return SigningKey.from_string(bytes.fromhex(hex_d), curve=NIST384p)
 
 
-def firmar_request(body_str: str, private_key_env: str = "CDC_PRIVATE_KEY_D") -> str:
+def firmar_request(body_str: str, private_key_hex: str) -> str:
     """Firma el string EXACTO del body con SHA256withECDSA/secp384r1 (hex DER)."""
-    sk = _private_key_from_env(private_key_env)
+    sk = _signing_key_from_hex(private_key_hex)
     signature_der = sk.sign(
         body_str.encode("utf-8"), hashfunc=hashlib.sha256, sigencode=sigencode_der
     )
@@ -250,18 +421,23 @@ def verificar_firma_respuesta(body_str: str, signature_hex: str, public_key_xy_h
 # Llamada al API (dev o prod)
 # ---------------------------------------------------------------------------
 
-def consultar_reporte_credito(persona: dict, env: str, carpeta_output: str) -> requests.Response:
+def consultar_reporte_credito(persona: dict, env: str, *,
+                               api_key: str, username: str = "", password: str = "",
+                               private_key_hex: str = "", public_key_hex: str = ""):
     """
     - dev:  solo requiere x-api-key.
     - prod: requiere x-api-key, x-signature (firmado con tu llave privada),
             username y password.
+
+    Devuelve (resp, headers_enviados, body_enviado): el llamador es quien
+    guarda la evidencia con guardar_evidencia(), porque el nombre de ese
+    archivo depende del folio que trae la respuesta (se conoce hasta acá
+    afuera, no dentro de esta función).
     """
     if env not in URLS:
         raise ValueError("env debe ser 'dev' o 'prod'")
-
-    api_key = os.environ.get("CDC_API_KEY")
     if not api_key:
-        raise RuntimeError("Falta la variable de entorno CDC_API_KEY.")
+        raise RuntimeError("Falta API_KEY_WS.")
 
     # Mismo string para firmar y enviar, así nunca hay mismatch.
     body_str = json.dumps(persona, ensure_ascii=False, separators=(",", ":"))
@@ -272,31 +448,30 @@ def consultar_reporte_credito(persona: dict, env: str, carpeta_output: str) -> r
     }
 
     if env == "prod":
-        username = os.environ.get("CDC_USERNAME")
-        password = os.environ.get("CDC_PASSWORD")
         faltantes = [
-            n for n, v in [("CDC_USERNAME", username), ("CDC_PASSWORD", password)] if not v
+            n for n, v in [
+                ("USUARIO_WS", username), ("PASS_WS", password),
+                ("LLAVE_PRIVADA_WS", private_key_hex),
+            ] if not v
         ]
         if faltantes:
-            raise RuntimeError(f"Faltan variables de entorno para prod: {', '.join(faltantes)}")
+            raise RuntimeError(f"Faltan flags para prod: {', '.join(faltantes)}")
 
-        headers["x-signature"] = firmar_request(body_str)
+        headers["x-signature"] = firmar_request(body_str, private_key_hex)
         headers["username"] = username
         headers["password"] = password
 
     resp = requests.post(
         URLS[env], headers=headers, data=body_str.encode("utf-8"), timeout=30
     )
-    guardar_evidencia(f"reporte_credito_{env}", headers, body_str, resp, carpeta_output)
 
-    if env == "prod":
-        public_key_xy = os.environ.get("CDC_PUBLIC_KEY_XY")
+    if env == "prod" and public_key_hex:
         signature_resp = resp.headers.get("x-signature")
-        if public_key_xy and signature_resp:
-            valida = verificar_firma_respuesta(resp.text, signature_resp, public_key_xy)
-            print(f"Firma de la respuesta: {'VÁLIDA' if valida else 'INVÁLIDA (revisa CDC_PUBLIC_KEY_XY)'}")
+        if signature_resp:
+            valida = verificar_firma_respuesta(resp.text, signature_resp, public_key_hex)
+            print(f"Firma de la respuesta: {'VÁLIDA' if valida else 'INVÁLIDA (revisa LLAVE_PUBLICA_WS)'}")
 
-    return resp
+    return resp, headers, body_str
 
 
 # ---------------------------------------------------------------------------
@@ -532,70 +707,73 @@ def guardar_json(data: dict, ruta_salida: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# XML -> PDF (integra xml_a_pdf.py / parser_xml.py / reporte_estructura.py,
+# adaptados de Xml2Pdf-Circulo)
+# ---------------------------------------------------------------------------
+
+def generar_pdf(data: dict, ruta_pdf: str, mascara: bool = False,
+                 ruta_xml_existente: str = None) -> str:
+    """
+    Genera el PDF del reporte a partir de la respuesta JSON del API.
+
+    Si ya escribiste el XML a disco (porque también pediste XML como
+    salida), pásalo en `ruta_xml_existente` para no rehacer trabajo. Si no,
+    se arma un XML temporal solo para alimentar al generador de PDF, y se
+    borra al terminar.
+    """
+    ruta_pdf = ruta_libre(ruta_pdf)
+
+    if ruta_xml_existente:
+        xml_a_pdf.construir(ruta_xml_existente, ruta_pdf, mascara=mascara)
+        ruta = os.path.abspath(ruta_pdf)
+        print(f"PDF generado: {ruta}")
+        return ruta
+
+    xml_texto = construir_xml(data, indentado=True)
+    fd, ruta_tmp = tempfile.mkstemp(suffix=".xml", prefix="cdc_tmp_")
+    os.close(fd)
+    try:
+        with open(ruta_tmp, "w", encoding="ISO-8859-1", errors="xmlcharrefreplace") as f:
+            f.write(xml_texto)
+        xml_a_pdf.construir(ruta_tmp, ruta_pdf, mascara=mascara)
+    finally:
+        try:
+            os.remove(ruta_tmp)
+        except OSError:
+            pass
+    ruta = os.path.abspath(ruta_pdf)
+    print(f"PDF generado: {ruta}")
+    return ruta
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
-def _debe_pausar_al_terminar() -> bool:
+def _debe_pausar_al_terminar(flags: dict) -> bool:
     """
-    CDC_PAUSAR_AL_TERMINAR en .env controla si la consola espera un ENTER
-    antes de cerrarse (para poder leer el resultado cuando corres el .exe
-    con doble clic, en vez de que la ventana se cierre sola).
-
-    - "1"/"true" -> siempre pausa.
-    - "0"/"false" -> nunca pausa.
-    - sin definir -> pausa solo si es el .exe compilado (sys.frozen); si
-      corres "python api_circulo.py" desde una terminal, esa terminal ya
-      se queda abierta sola, así que no hace falta.
+    PAUSAR_WS controla si la consola espera un ENTER antes de cerrarse.
+    Default: NO (nunca pausa, ni siquiera en el .exe). Solo pausa si pasas
+    explícitamente /PAUSAR_WS="SI".
     """
-    valor = os.environ.get("CDC_PAUSAR_AL_TERMINAR")
-    if valor is not None and valor.strip() != "":
-        return valor.strip().lower() not in ("0", "false", "no")
-    return getattr(sys, "frozen", False)
+    valor = flags.get("PAUSAR_WS", "").strip().upper()
+    return valor in ("SI", "S", "1", "TRUE")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Consulta al API de Círculo de Crédito.")
-    parser.add_argument(
-        "--env",
-        choices=["dev", "prod"],
-        help="Fuerza el ambiente (dev o prod). Si no se pasa, se detecta solo: "
-             "sin .json en input/ -> dev con persona de ejemplo; con .json -> prod.",
-    )
-    parser.add_argument(
-        "--endpoint",
-        choices=["reporte", "securitytest"],
-        default="reporte",
-        help="'reporte' consulta rcc-ficoscore-pld (default); 'securitytest' prueba tu firma ECDSA",
-    )
-    parser.add_argument(
-        "--input",
-        default=None,
-        help=(
-            "Ruta a UN JSON puntual a consultar (opcional). Si no se pasa, "
-            f"el script revisa todos los .json dentro de {CARPETA_INPUT}/ "
-            "y, si no hay ninguno, usa la persona de ejemplo en DEV."
-        ),
-    )
-    parser.add_argument(
-        "--output",
-        default=CARPETA_OUTPUT,
-        help=f"Carpeta donde se guardan el JSON, el XML y las evidencias (default: {CARPETA_OUTPUT})",
-    )
-    parser.add_argument(
-        "--xml-compacto",
-        action="store_true",
-        help="Además del XML indentado, genera el XML en una sola línea, como lo entrega el buró",
-    )
-    parser.add_argument(
-        "--sin-xml", action="store_true", help="No generar el XML de la respuesta"
-    )
-    args = parser.parse_args()
+def main(flags: dict) -> None:
+    output_dir = _ruta_junto_al_exe(_obtener(flags, "OUTPUT_WS"))
+    os.makedirs(output_dir, exist_ok=True)
 
-    os.makedirs(args.output, exist_ok=True)
+    api_key = _obtener(flags, "API_KEY_WS")
+    username = _obtener(flags, "USUARIO_WS")
+    password = _obtener(flags, "PASS_WS")
+    private_key_hex = _obtener(flags, "LLAVE_PRIVADA_WS")
+    public_key_hex = _obtener(flags, "LLAVE_PUBLICA_WS")
 
-    if args.endpoint == "securitytest":
+    endpoint = _obtener(flags, "ENDPOINT_WS").strip().lower()
+    if endpoint == "securitytest":
         try:
-            resp = probar_security_test(args.output)
+            resp = probar_security_test(output_dir, api_key, private_key_hex)
         except RuntimeError as e:
             print(f"Error de configuración: {e}")
             sys.exit(1)
@@ -603,32 +781,78 @@ def main() -> None:
         print(resp.text)
         return
 
-    # Si pasas --input, es un archivo puntual (se trata como "hay JSON real"
-    # -> prod, salvo que fuerces --env). Si no, se revisa la carpeta input/.
-    if args.input:
+    if endpoint == "xml2pdf":
+        # No llama al API: solo convierte XML(s) ya existentes a PDF, cada
+        # uno junto a su propio archivo de origen (mismo nombre, .pdf).
         try:
-            personas = [(os.path.splitext(os.path.basename(args.input))[0], cargar_persona(args.input))]
-        except (RuntimeError, OSError, json.JSONDecodeError) as e:
-            print(f"Error: no pude leer {args.input}: {e}")
+            rutas_xml = _resolver_rutas_xml(flags)
+        except RuntimeError as e:
+            print(f"Error: {e}")
             sys.exit(1)
-        usando_ejemplo = False
-    else:
-        personas, usando_ejemplo = listar_personas(CARPETA_INPUT)
 
-    env = args.env or ("dev" if usando_ejemplo else "prod")
+        pdf_mascara = _obtener(flags, "PDF_MASCARA_WS").strip().upper() in ("SI", "S", "1", "TRUE")
+        print(f"Voy a convertir {len(rutas_xml)} archivo(s) XML a PDF.\n")
+
+        hubo_error = False
+        for ruta_xml in rutas_xml:
+            ruta_pdf = os.path.splitext(ruta_xml)[0] + ".pdf"
+            print(f"--- {os.path.basename(ruta_xml)} -> {os.path.basename(ruta_pdf)} ---")
+            try:
+                generar_pdf({}, ruta_pdf, mascara=pdf_mascara, ruta_xml_existente=ruta_xml)
+            except (ValueError, OSError) as e:
+                print(f"  ! No se pudo generar el PDF: {e}")
+                hubo_error = True
+            print()
+
+        if hubo_error:
+            sys.exit(1)
+        return
+
+    try:
+        personas, usando_ejemplo = _resolver_personas(flags)
+    except RuntimeError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    ambiente = _obtener(flags, "AMBIENTE_WS").strip().lower()
+    if ambiente not in URLS:
+        print(f"Error: AMBIENTE_WS debe ser 'dev' o 'prod' (llegó {ambiente!r}).")
+        sys.exit(1)
 
     if usando_ejemplo:
-        print(f"No hay archivos .json en {CARPETA_INPUT}/; uso la persona de ejemplo del sandbox.\n")
+        ambiente = "dev"
+        print("No se pasó INPUT_WS ni datos de persona (Nombre_*/Domicilio_*); "
+              "uso la persona de ejemplo del sandbox en DEV.\n")
     else:
-        print(f"Encontré {len(personas)} archivo(s) en {'la ruta indicada' if args.input else CARPETA_INPUT + '/'}.\n")
+        print(f"Voy a consultar {len(personas)} persona(s).\n")
 
-    print(f">> Usando ambiente: {env.upper()} ({URLS[env]})\n")
+    print(f">> Usando ambiente: {ambiente.upper()} ({URLS[ambiente]})\n")
+
+    formato_salida = _obtener(flags, "ARCHIVOSALIDA_WS").strip().upper()
+    if formato_salida not in ("XML", "JSON", "PDF", "ALL"):
+        print(f"Error: ArchivoSalida_WS debe ser JSON, XML, PDF o ALL (llegó {formato_salida!r}).")
+        sys.exit(1)
+    generar_json = formato_salida in ("JSON", "ALL")
+    generar_xml = formato_salida in ("XML", "ALL")
+    generar_pdf_flag = formato_salida in ("PDF", "ALL")
+    xml_compacto = _obtener(flags, "XML_COMPACTO_WS").strip().upper() in ("SI", "S", "1", "TRUE")
+    pdf_mascara = _obtener(flags, "PDF_MASCARA_WS").strip().upper() in ("SI", "S", "1", "TRUE")
+
+    nombre_salida = _obtener(flags, "NOMBRE_SALIDA_WS").strip()
+    if nombre_salida and len(personas) > 1:
+        print(f"  ! NOMBRE_SALIDA_WS se ignora porque hay {len(personas)} personas en esta "
+              f"corrida; se usa el nombre automático dentro de OUTPUT_WS para cada una.\n")
+        nombre_salida = ""
 
     hubo_error = False
     for nombre, persona in personas:
         print(f"--- Consultando: {nombre} ---")
         try:
-            resp = consultar_reporte_credito(persona, env, args.output)
+            resp, headers_enviados, body_enviado = consultar_reporte_credito(
+                persona, ambiente,
+                api_key=api_key, username=username, password=password,
+                private_key_hex=private_key_hex, public_key_hex=public_key_hex,
+            )
         except RuntimeError as e:
             print(f"Error de configuración: {e}")
             sys.exit(1)
@@ -642,39 +866,69 @@ def main() -> None:
         try:
             data = resp.json()
         except ValueError:
+            data = None
+
+        if nombre_salida:
+            # El usuario puso el nombre (o ruta) sin extensión; nosotros
+            # agregamos .json/.xml/.pdf/.log según lo que se haya pedido.
+            ruta_base = _ruta_junto_al_exe(nombre_salida)
+            carpeta_destino = os.path.dirname(ruta_base)
+            if carpeta_destino:
+                os.makedirs(carpeta_destino, exist_ok=True)
+        else:
+            # El folio + el nombre de origen identifican cada corrida, así
+            # no se pisan los archivos entre distintas personas.
+            folio = (data.get("folioConsulta") if data else None) \
+                or datetime.now().strftime("%Y%m%d_%H%M%S")
+            ruta_base = os.path.join(output_dir, f"reporte_credito_{ambiente}_{nombre}_{folio}")
+
+        # La evidencia usa el mismo nombre base que el JSON/XML/PDF, junto a
+        # ellos (sin subcarpeta aparte), para poder identificar de un
+        # vistazo a qué consulta pertenece cada .log.
+        guardar_evidencia(f"{ruta_base}.log", headers_enviados, body_enviado, resp)
+
+        if data is None:
             print(resp.text)
             hubo_error = True
+            print()
             continue
 
         print(json.dumps(data, indent=2, ensure_ascii=False))
 
-        # El folio + el nombre del archivo de origen identifican cada
-        # corrida, así no se pisan los archivos entre distintas personas.
-        folio = data.get("folioConsulta") or datetime.now().strftime("%Y%m%d_%H%M%S")
-        base_nombre = f"reporte_credito_{env}_{nombre}_{folio}"
+        if generar_json:
+            guardar_json(data, f"{ruta_base}.json")
 
-        guardar_json(data, os.path.join(args.output, f"{base_nombre}.json"))
-        if not args.sin_xml:
-            exportar_a_xml(data, os.path.join(args.output, f"{base_nombre}.xml"))
-            if args.xml_compacto:
-                exportar_a_xml(
-                    data, os.path.join(args.output, f"{base_nombre}_plano.xml"), indentado=False
+        ruta_xml_generada = None
+        if generar_xml:
+            ruta_xml_generada = exportar_a_xml(data, f"{ruta_base}.xml")
+            if xml_compacto:
+                exportar_a_xml(data, f"{ruta_base}_plano.xml", indentado=False)
+
+        if generar_pdf_flag:
+            try:
+                generar_pdf(
+                    data, f"{ruta_base}.pdf",
+                    mascara=pdf_mascara, ruta_xml_existente=ruta_xml_generada,
                 )
+            except ValueError as e:
+                print(f"  ! No se pudo generar el PDF de {nombre}: {e}")
+                hubo_error = True
         print()
 
-    print(f"Todo quedó en: {os.path.abspath(args.output)}")
+    print(f"Todo quedó en: {os.path.abspath(output_dir)}")
     if hubo_error:
         sys.exit(1)
 
 
 if __name__ == "__main__":
+    flags = _parsear_flags_estilo_ws(sys.argv[1:])
     try:
-        main()
+        main(flags)
     finally:
         # Corre SIEMPRE, incluso si main() truena con un error no manejado
         # o llama sys.exit(), para que la ventana no se cierre antes de que
         # alcances a leer qué pasó.
-        if _debe_pausar_al_terminar():
+        if _debe_pausar_al_terminar(flags):
             try:
                 input("\nPresiona ENTER para cerrar...")
             except EOFError:

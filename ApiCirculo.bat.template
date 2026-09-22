@@ -1,0 +1,56 @@
+@echo off
+chcp 65001 >nul
+cd /d "%~dp0"
+REM ===========================================================================
+REM Plantilla de ejemplo para correr ApiCirculo.exe, mismo estilo de flags que
+REM BURO_DE_CREDITO.exe: /CLAVE_WS=valor
+REM
+REM COMO USARLA:
+REM 1. Copia este archivo a dist\ApiCirculo.bat, junto al .exe compilado.
+REM    dist\ esta en .gitignore, asi que esa copia con tus credenciales
+REM    reales nunca se sube a GitHub. Esta plantilla se queda sin datos reales.
+REM 2. Rellena API_KEY_WS, USUARIO_WS, PASS_WS y LLAVE_PRIVADA_WS con tus
+REM    credenciales reales de Circulo de Credito.
+REM 3. Quita el REM de la linea que quieras usar y ajusta los datos.
+REM
+REM /ArchivoSalida_WS controla que se genera: JSON, XML, PDF o ALL (los tres).
+REM ===========================================================================
+
+REM Ejemplo 1: sandbox, con la persona de prueba de siempre, los 3 archivos.
+REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="dev" /API_KEY_WS="TU_API_KEY" /Nombre_primerNombre_WS="JUAN" /Nombre_apellidoPaterno_WS="SESENTAYDOS" /Nombre_apellidoMaterno_WS="PRUEBA" /Nombre_RFC_WS="SEPJ650809JG1" /Nombre_fechaNacimiento_WS="1965-08-09" /Domicilio_direccion1_WS="PASADISO ENCONTRADO 58" /Domicilio_colonia_WS="MONTEVIDEO" /Domicilio_municipio_WS="GUSTAVO A MADERO" /Domicilio_ciudad_WS="CIUDAD DE MEXICO" /Domicilio_estado_WS="CDMX" /Domicilio_CP_WS="07730" /ArchivoSalida_WS="ALL"
+
+REM Ejemplo 2: produccion, persona pasada por flags, solo el PDF.
+REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="prod" /API_KEY_WS="TU_API_KEY" /USUARIO_WS="TU_USUARIO" /PASS_WS="TU_PASSWORD" /LLAVE_PRIVADA_WS="TU_LLAVE_PRIVADA_EN_HEX" /Nombre_primerNombre_WS="..." /Nombre_apellidoPaterno_WS="..." /Nombre_apellidoMaterno_WS="..." /Nombre_RFC_WS="..." /Nombre_fechaNacimiento_WS="AAAA-MM-DD" /Domicilio_direccion1_WS="..." /Domicilio_colonia_WS="..." /Domicilio_municipio_WS="..." /Domicilio_ciudad_WS="..." /Domicilio_estado_WS="..." /Domicilio_CP_WS="..." /ArchivoSalida_WS="PDF"
+
+REM Ejemplo 3a: produccion, un solo JSON de entrada, solo el XML.
+REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="prod" /API_KEY_WS="TU_API_KEY" /USUARIO_WS="TU_USUARIO" /PASS_WS="TU_PASSWORD" /LLAVE_PRIVADA_WS="TU_LLAVE_PRIVADA_EN_HEX" /INPUT_WS="input\persona.json" /ArchivoSalida_WS="XML"
+
+REM Ejemplo 3b: produccion, varios JSON de un jalon usando *, todo: JSON+XML+PDF.
+REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="prod" /API_KEY_WS="TU_API_KEY" /USUARIO_WS="TU_USUARIO" /PASS_WS="TU_PASSWORD" /LLAVE_PRIVADA_WS="TU_LLAVE_PRIVADA_EN_HEX" /INPUT_WS="input\*.json" /ArchivoSalida_WS="ALL"
+
+REM Ejemplo 4: solo JSON (sin XML ni PDF), util si solo necesitas la respuesta cruda.
+REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="prod" /API_KEY_WS="TU_API_KEY" /USUARIO_WS="TU_USUARIO" /PASS_WS="TU_PASSWORD" /LLAVE_PRIVADA_WS="TU_LLAVE_PRIVADA_EN_HEX" /INPUT_WS="input\*.json" /ArchivoSalida_WS="JSON"
+
+REM Ejemplo 5: PDF de demo con identidad ficticia, para mostrar el formato sin exponer datos reales.
+REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="prod" /API_KEY_WS="TU_API_KEY" /USUARIO_WS="TU_USUARIO" /PASS_WS="TU_PASSWORD" /LLAVE_PRIVADA_WS="TU_LLAVE_PRIVADA_EN_HEX" /INPUT_WS="input\persona.json" /ArchivoSalida_WS="PDF" /PDF_MASCARA_WS="SI"
+
+REM Ejemplo 5b: el mismo PDF pero SIN mascara (PDF_MASCARA_WS="NO", el default), con los datos reales de la persona.
+REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="prod" /API_KEY_WS="TU_API_KEY" /USUARIO_WS="TU_USUARIO" /PASS_WS="TU_PASSWORD" /LLAVE_PRIVADA_WS="TU_LLAVE_PRIVADA_EN_HEX" /INPUT_WS="input\persona.json" /ArchivoSalida_WS="PDF" /PDF_MASCARA_WS="NO"
+
+REM Ejemplo 6: nombre de archivo elegido por ti (solo funciona con UNA persona). Tu pones "reportes\juan_perez", el programa agrega .json/.xml/.pdf.
+REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="prod" /API_KEY_WS="TU_API_KEY" /USUARIO_WS="TU_USUARIO" /PASS_WS="TU_PASSWORD" /LLAVE_PRIVADA_WS="TU_LLAVE_PRIVADA_EN_HEX" /INPUT_WS="input\persona.json" /ArchivoSalida_WS="ALL" /NOMBRE_SALIDA_WS="reportes\juan_perez"
+
+REM Ejemplo 7: DEV con tu API key ya colocada (dev solo necesita esa), persona de ejemplo automatica, salida completa.
+REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="dev" /API_KEY_WS="TU_API_KEY" /ArchivoSalida_WS="ALL"
+
+REM Ejemplo 8: PRODUCCION completa, con las 4 credenciales colocadas y salida completa (JSON+XML+PDF).
+REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="prod" /API_KEY_WS="TU_API_KEY" /USUARIO_WS="TU_USUARIO" /PASS_WS="TU_PASSWORD" /LLAVE_PRIVADA_WS="TU_LLAVE_PRIVADA_EN_HEX" /INPUT_WS="input\persona.json" /ArchivoSalida_WS="ALL"
+
+REM Ejemplo 9: solo convertir un XML que ya tienes a PDF, sin llamar al API ni credenciales. El PDF queda junto al XML, mismo nombre.
+REM "%~dp0ApiCirculo.exe" /ENDPOINT_WS="xml2pdf" /INPUT_WS="input\persona.xml"
+
+REM Ejemplo 9b: lo mismo pero para varios XML de un jalon.
+REM "%~dp0ApiCirculo.exe" /ENDPOINT_WS="xml2pdf" /INPUT_WS="input\*.xml"
+
+REM Linea activa por default: sandbox con la persona de ejemplo, segura, los 3 archivos.
+"%~dp0ApiCirculo.exe" /AMBIENTE_WS="dev" /ArchivoSalida_WS="ALL"
