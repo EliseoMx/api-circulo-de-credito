@@ -335,11 +335,12 @@ def _resolver_rutas_xml(flags: dict) -> list:
 # Evidencia de request/response (para la solicitud de acceso productivo)
 # ---------------------------------------------------------------------------
 
-def guardar_evidencia(nombre: str, headers_enviados: dict, body_enviado: str,
-                       resp: requests.Response, carpeta_output: str) -> None:
-    carpeta = os.path.join(carpeta_output, "evidencias")
-    os.makedirs(carpeta, exist_ok=True)
-
+def guardar_evidencia(ruta_log: str, headers_enviados: dict, body_enviado: str,
+                       resp: requests.Response) -> None:
+    """Guarda el request/response completos en `ruta_log` (.log), tal cual
+    se le pase — el llamador decide el nombre y la carpeta (normalmente el
+    mismo nombre base que el JSON/XML/PDF de esa consulta, sin subcarpeta
+    aparte)."""
     headers_seguros = dict(headers_enviados)
     for campo_sensible in ("password", "x-api-key"):
         if campo_sensible in headers_seguros:
@@ -356,10 +357,10 @@ def guardar_evidencia(nombre: str, headers_enviados: dict, body_enviado: str,
         f"Headers: {json.dumps(dict(resp.headers), indent=2, ensure_ascii=False)}\n"
         f"Body:\n{resp.text}\n"
     )
-    ruta = os.path.join(carpeta, f"{nombre}.txt")
-    with open(ruta, "w", encoding="utf-8") as f:
+    ruta_log = ruta_libre(ruta_log)
+    with open(ruta_log, "w", encoding="utf-8") as f:
         f.write(contenido)
-    print(f"Evidencia guardada en: {os.path.abspath(ruta)}")
+    print(f"Evidencia guardada en: {os.path.abspath(ruta_log)}")
 
 
 def probar_security_test(carpeta_output: str, api_key: str, private_key_hex: str) -> requests.Response:
@@ -378,7 +379,7 @@ def probar_security_test(carpeta_output: str, api_key: str, private_key_hex: str
     resp = requests.post(
         SECURITY_TEST_URL, headers=headers, data=body_str.encode("utf-8"), timeout=30
     )
-    guardar_evidencia("securitytest", headers, body_str, resp, carpeta_output)
+    guardar_evidencia(os.path.join(carpeta_output, "securitytest.log"), headers, body_str, resp)
     return resp
 
 
@@ -420,13 +421,18 @@ def verificar_firma_respuesta(body_str: str, signature_hex: str, public_key_xy_h
 # Llamada al API (dev o prod)
 # ---------------------------------------------------------------------------
 
-def consultar_reporte_credito(persona: dict, env: str, carpeta_output: str, *,
+def consultar_reporte_credito(persona: dict, env: str, *,
                                api_key: str, username: str = "", password: str = "",
-                               private_key_hex: str = "", public_key_hex: str = "") -> requests.Response:
+                               private_key_hex: str = "", public_key_hex: str = ""):
     """
     - dev:  solo requiere x-api-key.
     - prod: requiere x-api-key, x-signature (firmado con tu llave privada),
             username y password.
+
+    Devuelve (resp, headers_enviados, body_enviado): el llamador es quien
+    guarda la evidencia con guardar_evidencia(), porque el nombre de ese
+    archivo depende del folio que trae la respuesta (se conoce hasta acá
+    afuera, no dentro de esta función).
     """
     if env not in URLS:
         raise ValueError("env debe ser 'dev' o 'prod'")
@@ -458,7 +464,6 @@ def consultar_reporte_credito(persona: dict, env: str, carpeta_output: str, *,
     resp = requests.post(
         URLS[env], headers=headers, data=body_str.encode("utf-8"), timeout=30
     )
-    guardar_evidencia(f"reporte_credito_{env}", headers, body_str, resp, carpeta_output)
 
     if env == "prod" and public_key_hex:
         signature_resp = resp.headers.get("x-signature")
@@ -466,7 +471,7 @@ def consultar_reporte_credito(persona: dict, env: str, carpeta_output: str, *,
             valida = verificar_firma_respuesta(resp.text, signature_resp, public_key_hex)
             print(f"Firma de la respuesta: {'VÁLIDA' if valida else 'INVÁLIDA (revisa LLAVE_PUBLICA_WS)'}")
 
-    return resp
+    return resp, headers, body_str
 
 
 # ---------------------------------------------------------------------------
@@ -843,8 +848,8 @@ def main(flags: dict) -> None:
     for nombre, persona in personas:
         print(f"--- Consultando: {nombre} ---")
         try:
-            resp = consultar_reporte_credito(
-                persona, ambiente, output_dir,
+            resp, headers_enviados, body_enviado = consultar_reporte_credito(
+                persona, ambiente,
                 api_key=api_key, username=username, password=password,
                 private_key_hex=private_key_hex, public_key_hex=public_key_hex,
             )
@@ -861,15 +866,11 @@ def main(flags: dict) -> None:
         try:
             data = resp.json()
         except ValueError:
-            print(resp.text)
-            hubo_error = True
-            continue
-
-        print(json.dumps(data, indent=2, ensure_ascii=False))
+            data = None
 
         if nombre_salida:
             # El usuario puso el nombre (o ruta) sin extensión; nosotros
-            # agregamos .json/.xml/.pdf según lo que se haya pedido generar.
+            # agregamos .json/.xml/.pdf/.log según lo que se haya pedido.
             ruta_base = _ruta_junto_al_exe(nombre_salida)
             carpeta_destino = os.path.dirname(ruta_base)
             if carpeta_destino:
@@ -877,8 +878,22 @@ def main(flags: dict) -> None:
         else:
             # El folio + el nombre de origen identifican cada corrida, así
             # no se pisan los archivos entre distintas personas.
-            folio = data.get("folioConsulta") or datetime.now().strftime("%Y%m%d_%H%M%S")
+            folio = (data.get("folioConsulta") if data else None) \
+                or datetime.now().strftime("%Y%m%d_%H%M%S")
             ruta_base = os.path.join(output_dir, f"reporte_credito_{ambiente}_{nombre}_{folio}")
+
+        # La evidencia usa el mismo nombre base que el JSON/XML/PDF, junto a
+        # ellos (sin subcarpeta aparte), para poder identificar de un
+        # vistazo a qué consulta pertenece cada .log.
+        guardar_evidencia(f"{ruta_base}.log", headers_enviados, body_enviado, resp)
+
+        if data is None:
+            print(resp.text)
+            hubo_error = True
+            print()
+            continue
+
+        print(json.dumps(data, indent=2, ensure_ascii=False))
 
         if generar_json:
             guardar_json(data, f"{ruta_base}.json")
