@@ -1,4 +1,4 @@
-"""
+r"""
 Cliente para el API "Reporte de Crédito Consolidado + FICO® Score y PLD
 Check® - Personas Físicas" de Círculo de Crédito.
 
@@ -40,7 +40,7 @@ DEFAULTS_FLAGS más abajo):
 
   Entrada por archivo (alternativa a los flags de arriba):
     /INPUT_WS="persona.json"     Un solo JSON con la persona.
-    /INPUT_WS="input\\*.json"     Con "*", procesa TODOS los que hagan match,
+    /INPUT_WS="input\*.json"     Con "*", procesa TODOS los que hagan match,
                                   uno por uno, cada quien con su propio
                                   reporte de salida.
                                   Si no pasas ni INPUT_WS ni ningún flag de
@@ -75,7 +75,14 @@ DEFAULTS_FLAGS más abajo):
                                   enmascaran.
 
   Otros:
-    /ENDPOINT_WS="reporte"       reporte (default) | securitytest.
+    /ENDPOINT_WS="reporte"       reporte (default) | securitytest | xml2pdf.
+                                  xml2pdf NO llama al API: solo convierte
+                                  XML(s) que ya tienes en disco a PDF. Usa
+                                  /INPUT_WS="archivo.xml" (o "carpeta\*.xml"
+                                  para varios) y deja el .pdf junto a cada
+                                  XML de origen, con el mismo nombre.
+                                  Respeta /PDF_MASCARA_WS. No necesita
+                                  credenciales de ningún tipo.
     /PAUSAR_WS=""                SI/NO. Sin definir: pausa solo si es el .exe
                                   compilado, para que no se cierre la
                                   consola antes de leer el resultado.
@@ -85,12 +92,12 @@ carpeta del .exe/script, nunca contra el directorio de trabajo actual.
 
 Ejemplo (ver también ApiCirculo.bat.template):
     ApiCirculo.exe /AMBIENTE_WS="prod" /API_KEY_WS="..." /USUARIO_WS="..." ^
-        /PASS_WS="..." /LLAVE_PRIVADA_WS="..." /INPUT_WS="input\\*.json"
+        /PASS_WS="..." /LLAVE_PRIVADA_WS="..." /INPUT_WS="input\*.json"
 
 --------------------------------------------------------------------------
 Instalación (una sola vez, para correr como script de Python):
     python -m venv venv
-    venv\\Scripts\\pip install -r requirements.txt
+    venv\Scripts\pip install -r requirements.txt
 """
 
 import glob
@@ -298,6 +305,28 @@ def _resolver_personas(flags: dict):
         return [("persona", _persona_desde_flags(flags))], False
 
     return [("ejemplo", PERSONA_EJEMPLO)], True
+
+
+def _resolver_rutas_xml(flags: dict) -> list:
+    """
+    Para ENDPOINT_WS="xml2pdf": resuelve INPUT_WS a una lista de rutas .xml
+    ya existentes en disco (no llama al API en absoluto).
+
+    - INPUT_WS="archivo.xml"        -> ese único archivo.
+    - INPUT_WS="carpeta\\*.xml"      -> todos los que hagan match.
+    """
+    input_ws = _obtener(flags, "INPUT_WS").strip()
+    if not input_ws:
+        raise RuntimeError(
+            'ENDPOINT_WS="xml2pdf" necesita /INPUT_WS="archivo.xml" '
+            '(o "carpeta\\*.xml" para varios).'
+        )
+    patron = _ruta_junto_al_exe(input_ws)
+    es_patron = any(c in input_ws for c in "*?[")
+    rutas = sorted(glob.glob(patron)) if es_patron else [patron]
+    if not rutas:
+        raise RuntimeError(f'No encontré ningún archivo con INPUT_WS="{input_ws}".')
+    return rutas
 
 
 # ---------------------------------------------------------------------------
@@ -751,6 +780,33 @@ def main(flags: dict) -> None:
             sys.exit(1)
         print(f"Status: {resp.status_code}")
         print(resp.text)
+        return
+
+    if endpoint == "xml2pdf":
+        # No llama al API: solo convierte XML(s) ya existentes a PDF, cada
+        # uno junto a su propio archivo de origen (mismo nombre, .pdf).
+        try:
+            rutas_xml = _resolver_rutas_xml(flags)
+        except RuntimeError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+
+        pdf_mascara = _obtener(flags, "PDF_MASCARA_WS").strip().upper() in ("SI", "S", "1", "TRUE")
+        print(f"Voy a convertir {len(rutas_xml)} archivo(s) XML a PDF.\n")
+
+        hubo_error = False
+        for ruta_xml in rutas_xml:
+            ruta_pdf = os.path.splitext(ruta_xml)[0] + ".pdf"
+            print(f"--- {os.path.basename(ruta_xml)} -> {os.path.basename(ruta_pdf)} ---")
+            try:
+                generar_pdf({}, ruta_pdf, mascara=pdf_mascara, ruta_xml_existente=ruta_xml)
+            except (ValueError, OSError) as e:
+                print(f"  ! No se pudo generar el PDF: {e}")
+                hubo_error = True
+            print()
+
+        if hubo_error:
+            sys.exit(1)
         return
 
     try:

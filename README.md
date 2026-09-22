@@ -74,11 +74,27 @@ memoria y lo borra al terminar — no te deja un XML suelto que no pediste.
 
 | Flag | Default | Descripción |
 |---|---|---|
-| `/ENDPOINT_WS` | `reporte` | `reporte` o `securitytest` |
+| `/ENDPOINT_WS` | `reporte` | `reporte`, `securitytest` o `xml2pdf` |
 | `/PAUSAR_WS` | (auto) | `SI`/`NO`. Sin definir: pausa solo si es el `.exe` |
 
 Todas las rutas relativas (`INPUT_WS`, `OUTPUT_WS`) se resuelven contra la
 carpeta del `.exe`/script, nunca contra el directorio de trabajo actual.
+
+### Solo convertir un XML a PDF (sin consultar el API)
+
+`/ENDPOINT_WS="xml2pdf"` no llama al API — convierte XML(s) que ya tienes en
+disco a PDF, sin necesitar ninguna credencial. El PDF queda **junto a cada
+XML de origen, con el mismo nombre**.
+
+```bash
+REM Un solo XML
+ApiCirculo.exe /ENDPOINT_WS="xml2pdf" /INPUT_WS="persona.xml"
+
+REM Varios de un jalon
+ApiCirculo.exe /ENDPOINT_WS="xml2pdf" /INPUT_WS="carpeta\*.xml"
+```
+
+Respeta `/PDF_MASCARA_WS` si quieres el PDF con identidad ficticia.
 
 ### Ejemplos
 

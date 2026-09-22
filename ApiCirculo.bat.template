@@ -46,5 +46,11 @@ REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="dev" /API_KEY_WS="TU_API_KEY" /ArchivoSa
 REM Ejemplo 8: PRODUCCION completa, con las 4 credenciales colocadas y salida completa (JSON+XML+PDF).
 REM "%~dp0ApiCirculo.exe" /AMBIENTE_WS="prod" /API_KEY_WS="TU_API_KEY" /USUARIO_WS="TU_USUARIO" /PASS_WS="TU_PASSWORD" /LLAVE_PRIVADA_WS="TU_LLAVE_PRIVADA_EN_HEX" /INPUT_WS="input\persona.json" /ArchivoSalida_WS="ALL"
 
+REM Ejemplo 9: solo convertir un XML que ya tienes a PDF, sin llamar al API ni credenciales. El PDF queda junto al XML, mismo nombre.
+REM "%~dp0ApiCirculo.exe" /ENDPOINT_WS="xml2pdf" /INPUT_WS="input\persona.xml"
+
+REM Ejemplo 9b: lo mismo pero para varios XML de un jalon.
+REM "%~dp0ApiCirculo.exe" /ENDPOINT_WS="xml2pdf" /INPUT_WS="input\*.xml"
+
 REM Linea activa por default: sandbox con la persona de ejemplo, segura, los 3 archivos.
 "%~dp0ApiCirculo.exe" /AMBIENTE_WS="dev" /ArchivoSalida_WS="ALL"
