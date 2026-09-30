@@ -92,9 +92,22 @@ DEFAULTS_FLAGS más abajo):
                                   XML(s) que ya tienes en disco a PDF. Usa
                                   /INPUT_WS="archivo.xml" (o "carpeta\*.xml"
                                   para varios) y deja el .pdf junto a cada
-                                  XML de origen, con el mismo nombre.
+                                  XML de origen, con el mismo nombre — salvo
+                                  que pases /PDF_SALIDA_WS="ruta.pdf" (solo
+                                  con UN xml) para elegir la ruta exacta.
                                   Respeta /PDF_MASCARA_WS. No necesita
                                   credenciales de ningún tipo.
+
+  Compatibilidad con el programa viejo (BURO_DE_CREDITO.exe):
+    /XML_SALIDA_WS="ruta.xml"    Si lo pasas y no forzaste ENDPOINT_WS, se
+                                  activa xml2pdf automáticamente usando ese
+                                  archivo como entrada (equivale a
+                                  /ENDPOINT_WS="xml2pdf" /INPUT_WS="ruta.xml").
+    /PDF_SALIDA_WS="ruta.pdf"    Ruta exacta del PDF de salida (ver arriba).
+    /ARCHIVO_INI=... /REPROCESAR_PDF=...
+                                  Se aceptan sin tronar pero no hacen nada
+                                  aquí (conceptos del programa viejo que no
+                                  aplican a este flujo).
     /PAUSAR_WS="NO"              Default NO: nunca deja la consola esperando
                                   un ENTER, ni siquiera en el .exe. Pásalo
                                   como "SI" para que sí espere (util si
@@ -206,6 +219,10 @@ DEFAULTS_FLAGS = {
     "PDF_MASCARA_WS": "NO",
     "ENDPOINT_WS": "reporte",
     "PAUSAR_WS": "NO",
+    # Compatibilidad con el programa viejo (BURO_DE_CREDITO.exe): ver el
+    # bloque de compatibilidad al inicio de main().
+    "XML_SALIDA_WS": "",
+    "PDF_SALIDA_WS": "",
 }
 
 # Flags que identifican que SÍ se quiere armar una persona a mano (no cuenta
@@ -777,6 +794,17 @@ def _debe_pausar_al_terminar(flags: dict) -> bool:
 
 
 def main(flags: dict) -> None:
+    # Compatibilidad con el programa viejo (BURO_DE_CREDITO.exe): si te
+    # pasan /XML_SALIDA_WS="ruta.xml" (un XML que ya existe) y no forzaste
+    # /ENDPOINT_WS, se asume que quieres regenerar el PDF de ese XML sin
+    # llamar al API — o sea, xml2pdf usando ese archivo como INPUT_WS.
+    # /ARCHIVO_INI y /REPROCESAR_PDF, del programa viejo, se aceptan sin
+    # tronar pero no hacen nada aquí (no aplican a este flujo).
+    if _obtener(flags, "XML_SALIDA_WS").strip() and "ENDPOINT_WS" not in flags:
+        flags = dict(flags)
+        flags["ENDPOINT_WS"] = "xml2pdf"
+        flags.setdefault("INPUT_WS", flags["XML_SALIDA_WS"])
+
     output_dir = _ruta_junto_al_exe(_obtener(flags, "OUTPUT_WS"))
     os.makedirs(output_dir, exist_ok=True)
 
@@ -807,11 +835,27 @@ def main(flags: dict) -> None:
             sys.exit(1)
 
         pdf_mascara = _obtener(flags, "PDF_MASCARA_WS").strip().upper() in ("SI", "S", "1", "TRUE")
+
+        # /PDF_SALIDA_WS (compatibilidad con el programa viejo): ruta EXACTA
+        # para el PDF, en vez de "junto al XML, mismo nombre". Solo aplica
+        # si es un solo XML; con varios no tendría sentido una ruta fija.
+        pdf_salida_ws = _obtener(flags, "PDF_SALIDA_WS").strip()
+        if pdf_salida_ws and len(rutas_xml) > 1:
+            print(f"  ! PDF_SALIDA_WS se ignora porque hay {len(rutas_xml)} XML en esta "
+                  f"corrida; cada uno genera su PDF junto a sí mismo.\n")
+            pdf_salida_ws = ""
+
         print(f"Voy a convertir {len(rutas_xml)} archivo(s) XML a PDF.\n")
 
         hubo_error = False
         for ruta_xml in rutas_xml:
-            ruta_pdf = os.path.splitext(ruta_xml)[0] + ".pdf"
+            if pdf_salida_ws:
+                ruta_pdf = _ruta_junto_al_exe(pdf_salida_ws)
+                carpeta_destino = os.path.dirname(ruta_pdf)
+                if carpeta_destino:
+                    os.makedirs(carpeta_destino, exist_ok=True)
+            else:
+                ruta_pdf = os.path.splitext(ruta_xml)[0] + ".pdf"
             print(f"--- {os.path.basename(ruta_xml)} -> {os.path.basename(ruta_pdf)} ---")
             try:
                 generar_pdf({}, ruta_pdf, mascara=pdf_mascara, ruta_xml_existente=ruta_xml)
