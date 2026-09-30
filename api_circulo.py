@@ -67,6 +67,18 @@ DEFAULTS_FLAGS más abajo):
                                   corrida; si hay varias (INPUT_WS con "*"),
                                   se ignora y se usa el nombre automático de
                                   OUTPUT_WS para cada una.
+
+                                  Sin este flag: si la persona vino de un
+                                  .json (INPUT_WS), la salida usa por
+                                  default ese mismo nombre (respetado uno
+                                  por uno si hay varios con "*"). Además se
+                                  guarda una copia del .json de entrada como
+                                  "<nombre>_input.json" junto a la
+                                  respuesta, para no perder ni confundir el
+                                  original con el "<nombre>.json" de salida.
+                                  Si la persona no vino de un archivo
+                                  (flags o de ejemplo), se usa el patrón de
+                                  siempre: reporte_credito_{env}_{nombre}_{folio}.
     /XML_COMPACTO_WS="NO"        SI genera además el XML en una sola línea.
     /PDF_MASCARA_WS="NO"         SI genera el PDF con identidad ficticia
                                   legible (para demos), en vez de los datos
@@ -276,13 +288,17 @@ def _persona_desde_flags(flags: dict) -> dict:
 
 def _resolver_personas(flags: dict):
     """
-    Devuelve (lista_de_(nombre, persona_dict), usando_ejemplo).
+    Devuelve (lista_de_(nombre, persona_dict), usando_ejemplo, desde_archivo).
 
     - INPUT_WS con "*" -> uno por cada archivo que haga match.
     - INPUT_WS sin "*"  -> ese único archivo.
     - Sin INPUT_WS pero con flags Nombre_*/Domicilio_* -> una persona armada
       con esos flags.
     - Sin nada de lo anterior -> persona de ejemplo del sandbox.
+
+    `desde_archivo` es True solo en el primer caso: sirve para que, si no
+    se pasó NOMBRE_SALIDA_WS, la salida por default tome el mismo nombre
+    del .json de entrada en vez del patrón "reporte_credito_...".
     """
     input_ws = _obtener(flags, "INPUT_WS").strip()
     if input_ws:
@@ -301,12 +317,12 @@ def _resolver_personas(flags: dict):
                 print(f"  ! No pude leer {ruta}: {e}")
         if not personas:
             raise RuntimeError("Ningún archivo de INPUT_WS se pudo leer correctamente.")
-        return personas, False
+        return personas, False, True
 
     if _hay_datos_de_persona_en_flags(flags):
-        return [("persona", _persona_desde_flags(flags))], False
+        return [("persona", _persona_desde_flags(flags))], False, False
 
-    return [("ejemplo", PERSONA_EJEMPLO)], True
+    return [("ejemplo", PERSONA_EJEMPLO)], True, False
 
 
 def _resolver_rutas_xml(flags: dict) -> list:
@@ -809,7 +825,7 @@ def main(flags: dict) -> None:
         return
 
     try:
-        personas, usando_ejemplo = _resolver_personas(flags)
+        personas, usando_ejemplo, desde_archivo = _resolver_personas(flags)
     except RuntimeError as e:
         print(f"Error: {e}")
         sys.exit(1)
@@ -875,6 +891,10 @@ def main(flags: dict) -> None:
             carpeta_destino = os.path.dirname(ruta_base)
             if carpeta_destino:
                 os.makedirs(carpeta_destino, exist_ok=True)
+        elif desde_archivo:
+            # Sin NOMBRE_SALIDA_WS, pero la persona vino de un .json: la
+            # salida usa ese mismo nombre por default.
+            ruta_base = os.path.join(output_dir, nombre)
         else:
             # El folio + el nombre de origen identifican cada corrida, así
             # no se pisan los archivos entre distintas personas.
@@ -886,6 +906,13 @@ def main(flags: dict) -> None:
         # ellos (sin subcarpeta aparte), para poder identificar de un
         # vistazo a qué consulta pertenece cada .log.
         guardar_evidencia(f"{ruta_base}.log", headers_enviados, body_enviado, resp)
+
+        if desde_archivo:
+            # El JSON de salida (la respuesta) va a usar el mismo nombre que
+            # el .json de entrada; para no perder/confundir ese archivo
+            # original, se guarda una copia junto a los demás como
+            # "<nombre>_input.json".
+            guardar_json(persona, f"{ruta_base}_input.json")
 
         if data is None:
             print(resp.text)
