@@ -56,6 +56,11 @@ DEFAULTS_FLAGS más abajo):
                                   a partir del XML (si no pides XML como
                                   salida, se usa uno temporal que se borra
                                   al terminar).
+                                  Si el API responde con un status distinto
+                                  de 200 (error), esto se ignora: solo se
+                                  guarda el JSON con el error, nunca XML ni
+                                  PDF (no tiene caso armarlos de un payload
+                                  que no es un reporte).
     /NOMBRE_SALIDA_WS="..."      Nombre (o ruta) SIN extensión para los
                                   archivos de salida, en vez del nombre
                                   automático en OUTPUT_WS. Tú pones el
@@ -965,6 +970,16 @@ def main(flags: dict) -> None:
             continue
 
         print(json.dumps(data, indent=2, ensure_ascii=False))
+
+        if resp.status_code != 200:
+            # Sin 200 el payload es un error del API, no un reporte: no
+            # tiene caso armar XML/PDF de eso. Se guarda solo el JSON de la
+            # respuesta (el de entrada ya se guardó arriba), sin importar
+            # qué se haya pedido en ArchivoSalida_WS.
+            guardar_json(data, f"{ruta_base}.json")
+            hubo_error = True
+            print()
+            continue
 
         if generar_json:
             guardar_json(data, f"{ruta_base}.json")
